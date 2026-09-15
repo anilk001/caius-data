@@ -40,6 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from address_parser import parse_us_address  # noqa: E402
 from hs4_classifier import MIN_CONFIDENCE, classify_hs4  # noqa: E402
 from company_cleaning import (  # noqa: E402
+    looks_like_logistics,
     clean_company_name,
     clean_hs4,
     clean_state,
@@ -111,6 +112,9 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
         "weight kg", "gross weight kg", "weight (kg)", "gross weight",
         "weight", "kgs", "kg",
     ),
+    # Manifests mix pounds and kilograms row by row, so the unit column is read
+    # rather than assumed — see parse_weight_kg.
+    "weight_unit": ("weight unit", "weight_unit", "weight uom", "uom", "unit"),
     "arrival_date": (
         "arrival date", "date of arrival", "arrival", "eta",
         "shipment date", "date", "bl date", "bill of lading date",
@@ -246,6 +250,7 @@ class Stats:
     hs4_underivable: int = 0
     address_parsed: int = 0
     address_unparseable: int = 0
+    skipped_logistics: int = 0
     companies: int = 0
     shipments_written: int = 0
 
@@ -259,6 +264,7 @@ class Stats:
             f"  HS4 underivable      {self.hs4_underivable:>8,}\n"
             f"  address parsed       {self.address_parsed:>8,}\n"
             f"  address unparseable  {self.address_unparseable:>8,}\n"
+            f"  skipped (forwarder)  {self.skipped_logistics:>8,}\n"
             f"  companies upserted   {self.companies:>8,}\n"
             f"  shipments written    {self.shipments_written:>8,}"
         )
@@ -322,6 +328,15 @@ def main() -> int:
     parser.add_argument(
         "--hs4",
         help="Force this HS4 code for every row (use when the export has no HS column)",
+    )
+    parser.add_argument(
+        "--keep-logistics",
+        action="store_true",
+        help=(
+            "Keep consignees that look like carriers, forwarders or customs "
+            "brokers. They are dropped by default: they appear in the consignee "
+            "field but are not the company that bought the goods."
+        ),
     )
     parser.add_argument(
         "--no-derive-hs4",
@@ -461,6 +476,14 @@ def main() -> int:
                 stats.skipped_no_name += 1
                 continue
 
+            # Carriers and forwarders turn up in the consignee field. Selling a
+            # shipping line to an exporter as "a US buyer of your product" is
+            # spotted on the first row and refunded on the second.
+            if looks_like_logistics(name):
+                stats.skipped_logistics += 1
+                if not args.keep_logistics:
+                    continue
+
             description = clean_text(cell(row, "product_description"))
 
             # Priority: an explicit --hs4, then a code the export actually
@@ -540,7 +563,9 @@ def main() -> int:
                     "product_description": description,
                     "port_of_lading": clean_text(cell(row, "port_of_lading"), 120),
                     "port_of_unlading": port_unlading,
-                    "weight_kg": parse_weight_kg(cell(row, "weight_kg")),
+                    "weight_kg": parse_weight_kg(
+                        cell(row, "weight_kg"), cell(row, "weight_unit")
+                    ),
                     "arrival_date": arrival.isoformat() if arrival else None,
                     "carrier": clean_text(cell(row, "carrier"), 120),
                     "raw_source": args.csv_path.name,

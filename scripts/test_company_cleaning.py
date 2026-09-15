@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from company_cleaning import (
     clean_company_name,
+    looks_like_logistics,
     clean_hs4,
     clean_state,
     grouping_key,
@@ -83,11 +84,47 @@ check("space time", parse_date("2026-02-20 09:30:00"), date(2026, 2, 20))
 check("junk", parse_date("N/A"), None)
 check("empty", parse_date(""), None)
 
-# --- Weights ---------------------------------------------------------------
+# --- Weights: the unit must be read, never assumed --------------------------
+# Real manifests carry "158277 LB" and "6165 KG" in adjacent rows. Stripping
+# the unit and keeping the number overstates every pound row by 2.2x.
+check("pounds converted to kg", parse_weight_kg("158277 LB"), 71793.24)
+check("pounds via unit column", parse_weight_kg("158277", "LB"), 71793.24)
+check("kg stays kg", parse_weight_kg("6165 KG"), 6165.0)
+check("kg via unit column", parse_weight_kg("6165", "KG"), 6165.0)
+check("metric tonnes", parse_weight_kg("5", "MT"), 5000.0)
+check("grams", parse_weight_kg("500", "G"), 0.5)
+check("embedded unit beats the column", parse_weight_kg("100 LB", "KG"), 45.359)
+check("unknown unit is refused", parse_weight_kg("1000", "banana"), None)
 check("thousands separator", parse_weight_kg("12,400.50"), 12400.50)
-check("unit suffix", parse_weight_kg("9800 KG"), 9800.0)
+check("unitless assumed kg", parse_weight_kg("9800"), 9800.0)
 check("zero is not a weight", parse_weight_kg("0"), None)
 check("junk", parse_weight_kg("n/a"), None)
+
+# --- Carriers and forwarders are not buyers ---------------------------------
+for name in [
+    "EFL CONTAINER LINES LLC",
+    "DE WELL CONTAINER SHIPPING, INC.",
+    "FLEXPORT INTERNATIONAL LLC",
+    "EXPEDITORS INTERNATIONAL",
+    "SHANGHAI ZEHONG INTERNATIONAL LOGISTICS CO., LTD",
+    "KUEHNE NAGEL LOGISTICS",
+]:
+    check(f"logistics: {name[:28]}", looks_like_logistics(name), True)
+
+for name in [
+    "GIORGIO ARMANI CORPORATION",
+    "OLD NAVY LLC",
+    "THE GAP, INC.",
+    "URBAN OUTFITTERS,INC",
+    "BANANA REPUBLIC.LLC",
+    "ALL SAINTS USA LTD.",
+    "SPICE KING USA CORP",
+    "ACME APPAREL LOGISTICS",
+]:
+    check(f"buyer: {name[:32]}", looks_like_logistics(name), False)
+
+check("empty name is not logistics", looks_like_logistics(""), False)
+check("none is not logistics", looks_like_logistics(None), False)
 
 # --- States ----------------------------------------------------------------
 check("full name", clean_state("California"), "CA")

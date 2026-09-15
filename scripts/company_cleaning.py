@@ -187,18 +187,127 @@ def parse_date(raw: str | None) -> date | None:
     return None
 
 
-def parse_weight_kg(raw: str | None) -> float | None:
-    """Parse a weight, tolerating thousands separators and unit suffixes."""
+# Weight units seen in real manifest exports, as a multiplier to kilograms.
+# Manifests mix them freely — one provider sample carried "158277 LB" and
+# "6165 KG" in adjacent rows — so the unit has to be read, never assumed.
+_WEIGHT_UNITS: dict[str, float] = {
+    "kg": 1.0, "kgs": 1.0, "kgm": 1.0, "kilo": 1.0, "kilos": 1.0,
+    "kilogram": 1.0, "kilograms": 1.0,
+    "lb": 0.45359237, "lbs": 0.45359237, "pound": 0.45359237,
+    "pounds": 0.45359237, "lbr": 0.45359237,
+    "g": 0.001, "gram": 0.001, "grams": 0.001,
+    "mt": 1000.0, "t": 1000.0, "ton": 1000.0, "tons": 1000.0,
+    "tonne": 1000.0, "tonnes": 1000.0, "metric ton": 1000.0,
+}
+
+_UNIT_IN_VALUE = re.compile(r"([a-z][a-z\s]*)$", re.I)
+
+
+def parse_weight_kg(raw: str | None, unit: str | None = None) -> float | None:
+    """
+    Parse a weight and return KILOGRAMS.
+
+    The unit may sit in its own column or be appended to the value. Stripping
+    it and keeping the number — which is what this used to do — overstates
+    every pound figure by a factor of 2.2, silently, with nothing to notice it
+    downstream.
+
+    An unrecognised unit returns None rather than a number of unknown scale. A
+    weight that might be pounds or kilograms is not a weight.
+    """
     if raw is None:
         return None
-    text = re.sub(r"[^\d.]", "", str(raw))
+
+    text = str(raw).strip()
     if not text:
         return None
+
+    # A unit appended to the value wins over the column, since it travels with
+    # the number: "158277 LB" is pounds even if the column header says KG.
+    embedded = _UNIT_IN_VALUE.search(text)
+    unit_token = (embedded.group(1) if embedded else unit) or unit
+
+    digits = re.sub(r"[^\d.]", "", text)
+    if not digits or digits.count(".") > 1:
+        return None
     try:
-        value = float(text)
+        value = float(digits)
     except ValueError:
         return None
-    return value if value > 0 else None
+    if value <= 0:
+        return None
+
+    if unit_token is None:
+        # No unit anywhere. Manifest weights are overwhelmingly kilograms, and
+        # refusing every unitless row would discard most exports.
+        return value
+
+    key = str(unit_token).strip().lower().rstrip(".")
+    multiplier = _WEIGHT_UNITS.get(key)
+    if multiplier is None:
+        return None
+
+    return round(value * multiplier, 3)
+
+
+# Freight forwarders, carriers, consolidators and customs brokers routinely
+# appear in the consignee field instead of the company that actually bought the
+# goods. A real sample carried "EFL CONTAINER LINES LLC" and "EXPOLANKA FREIGHT
+# VIETNAM" as consignees for women's dresses.
+#
+# This matters commercially, not just cosmetically. Selling a shipping line to
+# an Indian exporter as "a US buyer of your product" is the kind of error a
+# customer spots on the first row, and it is the fastest way to a refund and a
+# bad review.
+_LOGISTICS_MARKERS = (
+    "container line", "container lines", "container shipping",
+    "shipping line", "steamship", "ocean line",
+    "freight", "forwarder", "forwarding", "logistics", "nvocc",
+    "customs broker", "customhouse", "customs house", "cargo services",
+    "transport services", "consolidator", "consolidation",
+    "supply chain solutions", "3pl", "warehousing",
+    "express worldwide", "air cargo", "shipping agency", "shipping agencies",
+)
+
+# Names that are logistics-adjacent but often ARE the buyer, so they do not
+# trigger on their own — "Trading", "Sourcing", "Imports" are normal for
+# genuine importers.
+_LOGISTICS_SAFE = ("import", "trading", "apparel", "garment", "fashion", "brand")
+
+# Forwarders and carriers whose names carry no linguistic clue. "Flexport
+# International LLC" reads exactly like an importer; only knowing the company
+# tells you otherwise.
+_KNOWN_LOGISTICS = (
+    "flexport", "expeditors", "kuehne", "nagel", "panalpina", "db schenker",
+    "schenker", "dsv air", "dsv ocean", "ch robinson", "c.h. robinson",
+    "nippon express", "sinotrans", "yusen", "kerry logistics", "agility",
+    "geodis", "bollore", "damco", "ups supply chain", "fedex trade",
+    "dhl global", "dhl supply", "maersk", "msc mediterranean", "cma cgm",
+    "cosco", "evergreen line", "hapag", "ocean network express",
+    "yang ming", "hmm ", "oocl", "zim integrated", "de well",
+)
+
+
+def looks_like_logistics(name: str | None) -> bool:
+    """
+    True when a consignee name reads as a carrier, forwarder or broker rather
+    than the company that bought the goods.
+
+    Conservative by design: a false positive silently drops a real buyer from
+    every pack, so a name needs an unambiguous logistics marker and no
+    countervailing signal that it trades in its own right.
+    """
+    if not name:
+        return False
+    text = _WS.sub(" ", str(name).lower())
+
+    if any(known in text for known in _KNOWN_LOGISTICS):
+        return True
+
+    if not any(marker in text for marker in _LOGISTICS_MARKERS):
+        return False
+    # "Acme Apparel Logistics" is more likely a brand's own arm than a 3PL.
+    return not any(safe in text for safe in _LOGISTICS_SAFE)
 
 
 def clean_state(raw: str | None) -> str | None:
