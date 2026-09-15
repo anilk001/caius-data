@@ -74,6 +74,30 @@ Being evaluated: billofladingdata.com. Nothing purchased.
    their per-HS-code pricing is selling inference we now do ourselves.
 3. **Does the US country-specific API carry structured city/state fields?**
 4. Do credits expire? What are the rate limits?
+5. **What is the shipment-records endpoint called, and what does it take?**
+   `search-filters` is documented and working; the endpoint that actually
+   returns records is not, so `scripts/bold_api.py call` is still aimed at a
+   guessed name.
+
+### Answered by the live key
+
+**Origin-country filtering exists.** A `search-filters` response carries both
+`export_countries` and `import_countries` (~100 entries each, India among them).
+That changes what a pack is: not "the top 200 importers of HS 6204", but "200 US
+dress buyers currently sourcing from Vietnam" — the same records, sold to an
+Indian exporter as switch targets. Worth noting that in a 6204 shipment sample,
+every consignee sourced from Vietnam, Sri Lanka, China or Turkey, and not one
+from India. The buyers are there; they are just buying from someone else.
+
+**Their HS codes are raw filer strings, not a taxonomy.** A query for 620442
+returns 73 codes running from 2 digits (`62`, the whole apparel chapter) to 20
+(`62044290620449996211`, two codes typed into one field), and 18 of them belong
+to other headings entirely. Sending that list back buys handbags and T-shirts
+along with the dresses, and credits are charged per record returned. So the
+workflow is: `search-filters` -> prefix-filter on the HS4 heading -> pass the
+survivors to the records endpoint. `scripts/bold_api.py filters --hs 620442
+--codes-out codes.json` does the filtering and prints what it dropped;
+`refine` re-runs it against a saved response for free.
 
 Pricing seen so far: $99 per US HS code (lifetime, unlimited); $299/month for a
 1-seat "lead building" plan; $499 API setup plus credit packs from $59/25k to

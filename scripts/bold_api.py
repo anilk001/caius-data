@@ -9,7 +9,8 @@ to originate somewhere with real egress.
     export BOLD_API_KEY=...
 
     # Free: what filters exist for imports?
-    python scripts/bold_api.py filters --type imp --hs 6204
+    python scripts/bold_api.py filters --type imp --hs 620442 \\
+        --origin INDIA --codes-out data/6204-codes.json
 
     # Any endpoint, body from the command line, response saved to disk
     python scripts/bold_api.py call shipment-records \\
@@ -29,6 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -93,6 +95,141 @@ def post(endpoint: str, body: dict, *, retries: int = 3) -> dict:
     sys.exit("Exhausted retries.")
 
 
+# --- Making sense of what search-filters returns -----------------------------
+#
+# Their hs_codes list is not a clean taxonomy. It is the set of raw strings
+# customs filers actually typed, so a query for 620442 comes back with entries
+# from 2 digits ("62") to 20 ("62044290620449996211" — two codes run together),
+# most without a description, and a fair few belonging to other headings
+# entirely. Pass that list back verbatim and you buy records for handbags and
+# T-shirts alongside the dresses you asked for; credits are spent per record
+# returned, so the noise is not free.
+#
+# The fix is a prefix filter on the HS4 heading, which is the level the packs
+# are sold at anyway.
+
+
+def find_list(data, key: str) -> list:
+    """Find the list stored under `key`, however deeply the response nests it."""
+    if isinstance(data, dict):
+        value = data.get(key)
+        if isinstance(value, list):
+            return value
+        for nested in data.values():
+            found = find_list(nested, key)
+            if found:
+                return found
+    elif isinstance(data, list):
+        for item in data:
+            found = find_list(item, key)
+            if found:
+                return found
+    return []
+
+
+def option_pairs(data, key: str) -> list[tuple[str, str]]:
+    """
+    Normalise a filter list to (label, value) pairs.
+
+    Codes arrive as bare strings; countries as {"label": "INDIA", "value": "IN"}.
+    Both shapes turn up in one response, so neither is assumed.
+    """
+    pairs: list[tuple[str, str]] = []
+    for item in find_list(data, key):
+        if isinstance(item, str):
+            pairs.append((item, item))
+        elif isinstance(item, dict):
+            value = item.get("value") or item.get("code") or item.get("id")
+            label = item.get("label") or item.get("name") or value
+            if value is not None:
+                pairs.append((str(label), str(value)))
+    return pairs
+
+
+def leading_digits(code: str) -> str:
+    """The digit run a code starts with, ignoring any trailing description."""
+    match = re.match(r"\s*(\d+)", str(code))
+    return match.group(1) if match else ""
+
+
+def heading_of(code: str) -> str | None:
+    """The HS4 heading a code belongs to, or None if it is too short to tell."""
+    digits = leading_digits(code)
+    return digits[:4] if len(digits) >= 4 else None
+
+
+def select_codes(codes, headings) -> tuple[list[str], list[str]]:
+    """
+    Split returned codes into the ones worth buying and the ones to discard.
+
+    Anything shorter than four digits is dropped rather than kept: "62" is the
+    whole apparel chapter, and sending it back would widen the search from
+    dresses to every garment in the feed. Codes are returned in their original
+    spelling — the API's own vocabulary is what it expects back, not a
+    prettified version of it.
+    """
+    wanted = {h for h in (heading_of(c) for c in headings) if h}
+    kept: list[str] = []
+    dropped: list[str] = []
+    seen: set[str] = set()
+    for code in codes:
+        code = str(code)
+        if code in seen:
+            continue
+        seen.add(code)
+        (kept if heading_of(code) in wanted else dropped).append(code)
+    return kept, dropped
+
+
+def report_codes(data, headings) -> list[str]:
+    """Print what the prefix filter kept and dropped; return the kept list."""
+    codes = [value for _, value in option_pairs(data, "hs_codes")]
+    # With no heading to filter against every code would be "off-heading", which
+    # is a report nobody wants. Say nothing and let the caller dump the raw JSON.
+    if not codes or not headings:
+        return []
+
+    kept, dropped = select_codes(codes, headings)
+    wanted = sorted({h for h in (heading_of(h) for h in headings) if h})
+    print(f"\n=== hs_codes: {len(kept)} of {len(codes)} match {', '.join(wanted)} ===")
+
+    if dropped:
+        print(f"\nDropped {len(dropped)} off-heading code(s):")
+        by_heading = Counter(heading_of(c) or "under 4 digits" for c in dropped)
+        for heading, count in by_heading.most_common():
+            print(f"  {heading:<14} x{count}")
+
+    # A filer who types two codes into one field produces a string no schedule
+    # contains. It still matches its own rows, so it is kept — but it is worth
+    # seeing rather than silently shipping.
+    odd = [c for c in kept if len(leading_digits(c)) > 10]
+    if odd:
+        print(f"\nUnusually long (concatenated by the filer), kept anyway: {odd}")
+
+    return kept
+
+
+def report_countries(data, origin: str | None) -> None:
+    """Show which trade lanes can be filtered, and resolve one by name."""
+    for key, label in (("export_countries", "origin"), ("import_countries", "destination")):
+        pairs = option_pairs(data, key)
+        if pairs:
+            print(f"\n{key} ({label}): {len(pairs)} available")
+
+    if not origin:
+        return
+
+    pairs = option_pairs(data, "export_countries")
+    needle = origin.strip().upper()
+    matches = [p for p in pairs if needle in p[0].upper() or needle == p[1].upper()]
+    print(f"\nOrigin lookup for {origin!r}:")
+    if matches:
+        for name, value in matches:
+            print(f'  {name}  ->  {{"export_countries": ["{value}"]}}')
+    else:
+        print("  no matching export country in this response")
+
+
 def cmd_filters(args: argparse.Namespace) -> None:
     body: dict = {"type": args.type}
     if args.hs:
@@ -104,11 +241,36 @@ def cmd_filters(args: argparse.Namespace) -> None:
 
     print(f"POST search-filters  {json.dumps(body)}\n")
     data = post("search-filters", body)
-    print(json.dumps(data, indent=2)[:8000])
+    _report_filters(data, args)
+
+
+def cmd_refine(args: argparse.Namespace) -> None:
+    """Re-run the filter report against a saved response, spending nothing."""
+    _report_filters(json.loads(Path(args.path).read_text()), args)
+
+
+def _report_filters(data, args: argparse.Namespace) -> None:
+    kept = report_codes(data, args.hs or [])
+    report_countries(data, args.origin)
+
+    if not kept and not args.hs:
+        print(json.dumps(data, indent=2)[:8000])
+
+    if kept:
+        print("\nReady to paste into the records call:")
+        print(json.dumps({"hs_codes": kept}, indent=2)[:4000])
+
     if args.out:
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         Path(args.out).write_text(json.dumps(data, indent=2))
-        print(f"\nSaved to {args.out}")
+        print(f"\nFull response saved to {args.out}")
+
+    if args.codes_out:
+        if not kept:
+            sys.exit("Nothing to save: no hs_codes matched. Pass --hs to filter.")
+        Path(args.codes_out).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.codes_out).write_text(json.dumps(kept, indent=2))
+        print(f"{len(kept)} code(s) saved to {args.codes_out}")
 
 
 def cmd_call(args: argparse.Namespace) -> None:
@@ -195,8 +357,18 @@ def main() -> int:
     f.add_argument("--hs", action="append", help="HS code (repeatable)")
     f.add_argument("--product", action="append", help="Product name (repeatable)")
     f.add_argument("--company", help="Company id to scope to")
-    f.add_argument("--out", help="Save the response here")
+    f.add_argument("--origin", help="Country to look up in export_countries, e.g. INDIA")
+    f.add_argument("--out", help="Save the full response here")
+    f.add_argument("--codes-out", help="Save just the matching hs_codes here")
     f.set_defaults(func=cmd_filters)
+
+    r = sub.add_parser("refine", help="Re-filter a saved search-filters response")
+    r.add_argument("path")
+    r.add_argument("--hs", action="append", help="HS heading to keep (repeatable)")
+    r.add_argument("--origin", help="Country to look up in export_countries")
+    r.add_argument("--out", help="Ignored; kept so refine and filters share flags")
+    r.add_argument("--codes-out", help="Save just the matching hs_codes here")
+    r.set_defaults(func=cmd_refine)
 
     c = sub.add_parser("call", help="POST any endpoint and save the response")
     c.add_argument("endpoint", help="e.g. shipment-records")

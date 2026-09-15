@@ -13,7 +13,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
-    "test:python": "python3 scripts/test_company_cleaning.py && python3 scripts/test_hs4_classifier.py && python3 scripts/test_address_parser.py",
+    "test:python": "python3 scripts/test_company_cleaning.py && python3 scripts/test_hs4_classifier.py && python3 scripts/test_address_parser.py && python3 scripts/test_bold_api.py",
     "check": "npm run typecheck && npm run lint && npm run test && npm run test:python"
   },
   "dependencies": {
