@@ -2,13 +2,12 @@ import 'server-only'
 
 import type Stripe from 'stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { searchCompanies } from '@/lib/search'
+import { searchCompaniesFull } from '@/lib/search'
 import { csvFilename, toCsv, withBom } from '@/lib/csv'
 import { PACK_COLUMNS } from '@/lib/export-columns'
 import { getPack } from '@/lib/packs'
 import { sendPackDeliveryEmail } from '@/lib/email'
 import { EXPORT_BUCKET } from '@/lib/env'
-import type { CompanyRow } from '@/types/database'
 
 const SEVEN_DAYS_SECONDS = 60 * 60 * 24 * 7
 
@@ -94,32 +93,19 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
   }
 
   // --- 2. Assemble the records ---------------------------------------------
-  const { rows } = await searchCompanies(admin, {
+  // One query, every column, already ranked by volume. The withheld columns
+  // (street address, port, first/last seen) are what the buyer is paying for.
+  const { rows: ordered } = await searchCompaniesFull(admin, {
     ...filters,
     limit: recordCount,
   })
 
-  if (rows.length === 0) {
+  if (ordered.length === 0) {
     await admin.from('orders').update({ status: 'failed' }).eq('id', orderId)
     throw new Error(
       `Order ${orderId} matched zero companies — refund required for ${email}`,
     )
   }
-
-  // searchCompanies returns the public projection; the paid CSV needs the
-  // withheld columns too, so re-read the full rows by id in rank order.
-  const ids = rows.map((r) => r.id)
-  const { data: fullRows, error: fullError } = await admin
-    .from('companies')
-    .select('*')
-    .in('id', ids)
-
-  if (fullError) throw new Error(`Pack assembly failed: ${fullError.message}`)
-
-  const byId = new Map((fullRows ?? []).map((r) => [r.id, r as CompanyRow]))
-  const ordered = ids
-    .map((id) => byId.get(id))
-    .filter((r): r is CompanyRow => Boolean(r))
 
   const csv = withBom(toCsv(ordered, PACK_COLUMNS))
 

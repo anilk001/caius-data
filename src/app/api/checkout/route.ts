@@ -51,14 +51,19 @@ export async function POST(request: NextRequest) {
   try {
     // Refuse to sell an empty pack. Checking against the same anon-visible rows
     // the buyer previewed keeps the promise on the button honest.
+    //
+    // This asks "is there at least one?", not "how many?". An estimated count
+    // falls back to the query planner, whose statistics are stale immediately
+    // after a bulk ingest — so a freshly loaded table can report zero and make
+    // us refuse a sale we could perfectly well fulfil. Fetching one row is both
+    // cheaper and exact.
     const anon = await createClient()
-    const { total } = await searchCompanies(anon, {
+    const { rows: available } = await searchCompanies(anon, {
       ...filters,
       limit: 1,
-      withCount: true,
     })
 
-    if (total !== null && total === 0) {
+    if (available.length === 0) {
       return NextResponse.json(
         { error: 'No companies match those filters, so there is nothing to sell you.' },
         { status: 409 },

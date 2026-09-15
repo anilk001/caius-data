@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import { csvFilename, toCsv, withBom, type CsvColumn } from '../src/lib/csv.ts'
 import { normalizeHs4, isHs4 } from '../src/lib/hs4.ts'
+import { MAX_SEARCH_LIMIT } from '../src/lib/search-limits.ts'
 import { PACKS, getPack } from '../src/lib/packs.ts'
 import { formatUsd } from '../src/lib/utils.ts'
 
@@ -136,6 +137,19 @@ describe('packs', () => {
   it('refuses an unknown pack id, so price cannot be forged', () => {
     assert.equal(getPack('free-1000000'), undefined)
     assert.equal(getPack(null), undefined)
+  })
+})
+
+describe('pack / query limits', () => {
+  // A pack bigger than the query ceiling would silently ship a short file: the
+  // buyer pays for 1000 records and receives 500, with nothing raising an error.
+  it('no pack exceeds the maximum rows a single query returns', () => {
+    for (const pack of PACKS) {
+      assert.ok(
+        pack.recordCount <= MAX_SEARCH_LIMIT,
+        `pack ${pack.id} wants ${pack.recordCount} rows but the query ceiling is ${MAX_SEARCH_LIMIT}`,
+      )
+    }
   })
 })
 
