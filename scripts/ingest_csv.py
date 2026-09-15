@@ -37,6 +37,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from address_parser import parse_us_address  # noqa: E402
 from hs4_classifier import MIN_CONFIDENCE, classify_hs4  # noqa: E402
 from company_cleaning import (  # noqa: E402
     clean_company_name,
@@ -243,6 +244,8 @@ class Stats:
     skipped_duplicate: int = 0
     hs4_derived: int = 0
     hs4_underivable: int = 0
+    address_parsed: int = 0
+    address_unparseable: int = 0
     companies: int = 0
     shipments_written: int = 0
 
@@ -254,6 +257,8 @@ class Stats:
             f"  skipped (duplicate)  {self.skipped_duplicate:>8,}\n"
             f"  HS4 derived          {self.hs4_derived:>8,}\n"
             f"  HS4 underivable      {self.hs4_underivable:>8,}\n"
+            f"  address parsed       {self.address_parsed:>8,}\n"
+            f"  address unparseable  {self.address_unparseable:>8,}\n"
             f"  companies upserted   {self.companies:>8,}\n"
             f"  shipments written    {self.shipments_written:>8,}"
         )
@@ -485,10 +490,23 @@ def main() -> int:
 
             city = clean_text(cell(row, "city"), 120)
             state = clean_state(cell(row, "state"))
+            address = clean_text(cell(row, "address"), 300)
+
+            # The public manifest feed has one address field and no separate
+            # city/state (19 CFR 103.31(e)(3)). Without them every row becomes
+            # its own company, because city and state are part of the grouping
+            # key — so parse them out when the export does not supply them.
+            if address and (not city or not state):
+                parsed = parse_us_address(address)
+                city = city or parsed.city
+                state = state or parsed.state
+                if parsed.is_usable:
+                    stats.address_parsed += 1
+                elif not city and not state:
+                    stats.address_unparseable += 1
             # Tier 1 is a US importer dataset; absent an explicit importer
             # country column, US is the correct default.
             country = clean_text(cell(row, "country"), 60) or "US"
-            address = clean_text(cell(row, "address"), 300)
             port_unlading = clean_text(cell(row, "port_of_unlading"), 120)
             arrival = parse_date(cell(row, "arrival_date"))
 
