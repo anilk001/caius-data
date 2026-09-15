@@ -45,11 +45,12 @@ _PLACEHOLDER_NAMES = {
     "same as consignee", "consignee", "not available", "notify party",
 }
 
-# "PVT.LTD." is one token to a title-caser, which renders it "Pvt.ltd" — not a
-# name to put in front of a paying customer. Split a full stop that sits between
-# two letters only when what follows is a word rather than an initial, so
-# "PVT.LTD" opens up but "J.P. MORGAN" and "U.S.A." are left alone.
-_GLUED_SUFFIX = re.compile(r"(?<=[A-Za-z])\.(?=[A-Za-z]{2,})")
+# "PVT.LTD." and "URBAN OUTFITTERS,INC" are each one token to a title-caser,
+# which renders them "Pvt.ltd" and "Outfitters,inc" — not names to put in front
+# of a paying customer. Split a full stop or comma sitting between two letters,
+# but only when what follows is a word rather than an initial, so "PVT.LTD"
+# opens up while "J.P. MORGAN" and "U.S.A." are left alone.
+_GLUED_SUFFIX = re.compile(r"(?<=[A-Za-z])([.,])(?=[A-Za-z]{2,})")
 
 # Dotted initials: U.S.A., J.P., A.B.C. A plain title-caser lower-cases
 # everything after the first letter and yields "U.s.a.".
@@ -78,7 +79,7 @@ def clean_company_name(raw: str | None) -> str | None:
     if not raw:
         return None
 
-    name = _WS.sub(" ", _GLUED_SUFFIX.sub(". ", str(raw))).strip()
+    name = _WS.sub(" ", _GLUED_SUFFIX.sub(r"\1 ", str(raw))).strip()
     if name.lower() in _PLACEHOLDER_NAMES:
         return None
 
@@ -315,6 +316,42 @@ _KNOWN_LOGISTICS = (
     "cosco", "evergreen line", "hapag", "ocean network express",
     "yang ming", "hmm ", "oocl", "zim integrated", "de well",
 )
+
+
+# A parcel consolidator's name gives nothing away — "Stelcore Management
+# Services LLC" reads like any other buyer. Its trade does: 51,968 shipments of
+# HS 6204 worth $275,311 in total, which is $5 and exactly one piece per
+# shipment. Real wholesale buyers in the same list run from $217 to $13,505 per
+# shipment. Sorted by shipment count, which is how packs are assembled, that
+# company sits at row 1 of every pack unless something catches it.
+MIN_SHIPMENTS_TO_JUDGE = 500
+MIN_PIECES_PER_SHIPMENT = 2.0
+MIN_VALUE_PER_SHIPMENT = 50.0
+
+
+def looks_like_consolidator(
+    shipments: int | None,
+    value: float | None = None,
+    quantity: float | None = None,
+) -> bool:
+    """
+    True when a company's trade profile reads as parcel consolidation rather
+    than wholesale buying.
+
+    Judges only companies with enough shipments for the ratios to mean
+    anything. Below that threshold a single mis-keyed declaration swings the
+    average, and dropping a real buyer costs more than keeping a bad row: the
+    buyer is gone from every pack, silently, with nothing in the output to say
+    why.
+    """
+    if not shipments or shipments < MIN_SHIPMENTS_TO_JUDGE:
+        return False
+
+    if quantity and quantity / shipments < MIN_PIECES_PER_SHIPMENT:
+        return True
+    if value and value / shipments < MIN_VALUE_PER_SHIPMENT:
+        return True
+    return False
 
 
 def looks_like_logistics(name: str | None) -> bool:

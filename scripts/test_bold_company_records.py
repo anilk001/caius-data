@@ -112,7 +112,7 @@ check("non-matching origins are counted", skipped["does not source from VN"], 2)
 # Without an origin filter the forwarder must still be dropped, by name.
 rows_all, skipped_all = map_all([INDITEX, VIETNAM_BUYER, FORWARDER], "6204")
 check("unfiltered, both real buyers survive", len(rows_all), 2)
-check("and the forwarder does not", skipped_all["blank name or logistics company"], 1)
+check("and the forwarder does not", skipped_all["freight forwarder or carrier"], 1)
 
 # --- Degenerate shapes -------------------------------------------------------
 BARE = {"name": "ACME IMPORTS LLC", "total_shipments": None}
@@ -125,6 +125,60 @@ check("no products means no description", bare_row["product_description"], None)
 rows_junk, skipped_junk = map_all([BARE, "not an object", 7], "6204")
 check("non-objects are skipped, not fatal", len(rows_junk), 1)
 check("and are counted", skipped_junk["not an object"], 2)
+
+# --- Deduplication and consolidator filtering, on the real top-10 ------------
+# Every row below is from one live search: HS 6204, buyer country US, seller
+# country All. Nothing here is invented.
+LIVE = [
+    # Top by shipment count, and worthless: 51,968 shipments totalling $275,311,
+    # which is $5 and exactly one piece each, through Delhi Air Cargo. Sorted by
+    # shipments — which is how packs are assembled — it leads every pack.
+    {"id": "1", "name": "STELCORE MANAGEMENT SERVICES LLC", "total_shipments": 51968,
+     "total_import_value": 275311.87, "total_import_quantity": 51968,
+     "country": {"code": "US"}, "export_countries": [{"name": "INDIA", "code": "IN"}],
+     "unloading_ports": ["DELHI AIR CARGO"], "products": "LADIES DRESS"},
+    {"id": "2", "name": "AZAZIE SG PTE. LTD.", "total_shipments": 24332,
+     "total_import_value": 5284487.47, "total_import_quantity": 246566,
+     "country": {"code": "US"}, "export_countries": [{"name": "VIET NAM", "code": "VN"}],
+     "unloading_ports": ["HQNAMDINH"], "products": "WOMENS DRESS"},
+    # The same buyer, filed under an alias. The vendor bills 15 credits for each.
+    {"id": "3", "name": "AZAZIE SG PTE. LTD/ AZAZIE INC.", "total_shipments": 3184,
+     "total_import_value": 459487.10, "total_import_quantity": 19877,
+     "country": {"code": "US"}, "export_countries": [{"name": "SRI LANKA", "code": "LK"}],
+     "unloading_ports": [], "products": ""},
+    {"id": "4", "name": "OLD NAVY LLC", "total_shipments": 7182,
+     "total_import_value": 96991578.38, "total_import_quantity": 13736400,
+     "country": {"code": "US"},
+     "export_countries": [{"name": "INDIA", "code": "IN"}, {"name": "PAKISTAN", "code": "PK"}],
+     "unloading_ports": ["New York/Newark Area, Newark, New Jersey"],
+     "products": "WOMENS WOVEN DRESS"},
+]
+
+rows, skipped = map_all(LIVE, "6204")
+names = sorted(r["name"] for r in rows)
+
+check("the consolidator never reaches a pack", "Stelcore Management Services LLC" in names, False)
+check("and is reported as such", skipped["parcel consolidator (1 pc or under $50 a shipment)"], 1)
+check("two real buyers survive", len(rows), 2)
+
+azazie = next(r for r in rows if "Azazie" in r["name"])
+check("the alias is merged, not sold twice", skipped["merged into another filing of the same company"], 1)
+check("merged shipments are summed", azazie["shipment_count"], 24332 + 3184)
+check("merged values are summed", round(azazie["_total_value"], 2), round(5284487.47 + 459487.10, 2))
+check("origins are unioned across filings", azazie["_sources_from"], ["LK", "VN"])
+check("the fuller filing supplies the display name", azazie["name"], "Azazie SG Pte Ltd/ Azazie Inc")
+check("a field empty in one filing is taken from the other", azazie["primary_port"], "HQNAMDINH")
+
+old_navy = next(r for r in rows if "Old Navy" in r["name"])
+check("a genuine high-volume buyer is untouched", old_navy["shipment_count"], 7182)
+check("its US unloading port is kept", old_navy["primary_port"], "New York/Newark Area, Newark, New Jersey")
+
+# Old Navy runs $13,505 and 1,913 pieces a shipment; Azazie $217 and 10. Both
+# are real. The threshold must not creep up to where direct-to-consumer buyers
+# start failing it.
+check("a low-volume company is never judged on ratios",
+      map_all([dict(LIVE[0], id="5", total_shipments=40, total_import_quantity=40,
+                    total_import_value=212.0)], "6204")[0] != [], True)
 
 if failures:
     print(f"\n{len(failures)} failure(s):\n")

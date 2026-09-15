@@ -154,6 +154,8 @@ for raw, expected in [
     ("J.P.MORGAN CHASE", "J.P. Morgan Chase"),
     ("U.S.A. IMPORTS INC", "U.S.A. Imports Inc"),
     ("A.B.C. TEXTILES L.L.C.", "A.B.C. Textiles LLC"),
+    ("URBAN OUTFITTERS,INC", "Urban Outfitters, Inc"),
+    ("SINTEX INTERNATIONAL LIMITED.,", "Sintex International Limited"),
 ]:
     got = clean_company_name(raw)
     if got != expected:

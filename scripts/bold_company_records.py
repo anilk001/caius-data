@@ -38,7 +38,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from company_cleaning import clean_company_name, clean_hs4, clean_text, looks_like_logistics
+from company_cleaning import (
+    clean_company_name,
+    clean_hs4,
+    clean_text,
+    grouping_key,
+    looks_like_consolidator,
+    looks_like_logistics,
+)
 
 # Their JSON uses "-" where a value is absent rather than null or "".
 ABSENT = {"", "-", "--", "n/a", "N/A", "null", "none"}
@@ -105,6 +112,12 @@ def map_company_record(record: dict, hs4: str) -> dict | None:
     country = record.get("country") or {}
     ports = [p for p in (_text(p) for p in record.get("unloading_ports") or []) if p]
 
+    shipments = int(record.get("total_shipments") or 0)
+    value = record.get("total_import_value") or record.get("total_export_value")
+    quantity = record.get("total_import_quantity") or record.get("total_export_quantity")
+    if looks_like_consolidator(shipments, value, quantity):
+        return None
+
     return {
         "name": name,
         "hs4_code": heading,
@@ -119,18 +132,66 @@ def map_company_record(record: dict, hs4: str) -> dict | None:
         # listed is a proxy, and is marked as such rather than passed off as
         # the real thing.
         "primary_port": ports[0] if ports else None,
-        "shipment_count": int(record.get("total_shipments") or 0),
+        "shipment_count": shipments,
         # Carried for the pack CSV, not for the companies table.
         "_vendor_id": _text(record.get("id")),
         "_domain": _text(record.get("domain")),
-        "_total_value": record.get("total_import_value"),
+        "_total_value": value,
+        "_total_quantity": quantity,
         "_total_suppliers": record.get("total_suppliers"),
         "_sources_from": _country_codes(record, "export_countries"),
         "_primary_port_is_proxy": bool(ports),
     }
 
 
-def map_all(records, hs4: str, origin: str | None = None) -> tuple[list[dict], Counter]:
+def merge_rows(rows: list[dict]) -> tuple[list[dict], int]:
+    """
+    Collapse rows that are the same company filed under different names.
+
+    Azazie appears twice in one 7,592-row buyer list — "AZAZIE SG PTE. LTD."
+    and "AZAZIE SG PTE. LTD/ AZAZIE INC." — and the vendor's own aggregation
+    does not merge them. Sold as-is that is one buyer shown as two, billed at
+    15 credits each. grouping_key does the matching; this does the arithmetic.
+
+    Totals are summed, because two filings of one company are two parts of its
+    trade, not two estimates of it. The longest name wins as the display name:
+    the fuller filing is the one that names the whole group.
+    """
+    merged: dict[str, dict] = {}
+    duplicates = 0
+
+    for row in rows:
+        key = grouping_key(row["name"], row["city"], row["state"], row["hs4_code"])
+        if key is None:
+            key = f"{row['name'].lower()}|{row['hs4_code']}"
+
+        existing = merged.get(key)
+        if existing is None:
+            merged[key] = dict(row)
+            continue
+
+        duplicates += 1
+        existing["shipment_count"] += row["shipment_count"]
+        for field in ("_total_value", "_total_quantity"):
+            if row.get(field):
+                existing[field] = (existing.get(field) or 0) + row[field]
+        # Origins are a set union: a buyer sourcing from Vietnam under one
+        # filing and Sri Lanka under another sources from both.
+        existing["_sources_from"] = sorted(
+            set(existing["_sources_from"]) | set(row["_sources_from"])
+        )
+        for field in ("product_description", "primary_port", "_domain", "_vendor_id"):
+            if not existing.get(field) and row.get(field):
+                existing[field] = row[field]
+        if len(row["name"]) > len(existing["name"]):
+            existing["name"] = row["name"]
+
+    return list(merged.values()), duplicates
+
+
+def map_all(
+    records, hs4: str, origin: str | None = None
+) -> tuple[list[dict], Counter]:
     """Map a whole response, counting what was dropped and why."""
     rows: list[dict] = []
     skipped: Counter = Counter()
@@ -141,11 +202,22 @@ def map_all(records, hs4: str, origin: str | None = None) -> tuple[list[dict], C
         if origin and not sources_from(record, origin):
             skipped[f"does not source from {origin.upper()}"] += 1
             continue
+
+        name = clean_company_name(_text(record.get("name")) or "")
         row = map_company_record(record, hs4)
         if row is None:
-            skipped["blank name or logistics company"] += 1
+            if not name:
+                skipped["blank or placeholder name"] += 1
+            elif looks_like_logistics(name):
+                skipped["freight forwarder or carrier"] += 1
+            else:
+                skipped["parcel consolidator (1 pc or under $50 a shipment)"] += 1
             continue
         rows.append(row)
+
+    rows, duplicates = merge_rows(rows)
+    if duplicates:
+        skipped[f"merged into another filing of the same company"] = duplicates
     return rows, skipped
 
 

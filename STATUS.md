@@ -188,18 +188,39 @@ for bridal gowns, which is exactly right. But two things follow:
   "companies buying into the US market", and the country column means
   destination, not domicile. Fix the copy before launch, not after a refund
   request.
-* Whether a US-domiciled buyer list exists at all depends on which source the
-  seller-country filter selects. Run the same search with seller country set
-  to All Countries: if the top names become Ross, TJX and Macy's, they hold
-  US import manifests too and switch source per filter. If it stays Singapore
-  holding companies, they only have counterparty data and the product has to
-  be described accordingly.
+* The same search with seller country set to All Countries answers this. It
+  returns 15,916 importers and the India/Pakistan rows are real US companies:
+  Old Navy LLC, The Gap Inc, Urban Outfitters. Those rows also carry weight in
+  kg and **US unloading ports** (New York/Newark, Chicago) alongside Indian
+  loading ports (Nhava Sheva, Delhi) — fields the Vietnam rows do not have.
 
-Entity resolution is ours to do, not theirs. Azazie appears at rows 1 and 8 of
+So they hold two different sources and the filter picks between them. For
+Anil's market that is the good news: on the **India lane the buyers are
+US-domiciled and the records are richer**, which is exactly the pack an Indian
+exporter wants. Old Navy and Gap both source from India *and* Pakistan, so a
+Pakistani supplier is a displaceable competitor sitting in the same row.
+
+Describe a pack by the lane it was built from, not with one blanket claim.
+
+### Two filters that have to run before anything is sold
+
+**Parcel consolidators, which no name rule catches.** Top of that 15,916-row
+list by shipment count is STELCORE MANAGEMENT SERVICES LLC with 51,968
+shipments — worth $275,311 in total. That is $5 and exactly 1.0 pieces per
+shipment, through Delhi Air Cargo. Real buyers in the same list run $217 to
+$13,505 per shipment. The name gives nothing away; the ratios do, so
+`looks_like_consolidator()` judges on pieces and value per shipment and only
+for companies with 500+ shipments, below which one mis-keyed declaration
+swings the average. Packs are assembled "top N by volume", so without this
+Stelcore leads every pack sold.
+
+**Duplicate filings.** Entity resolution is ours to do, not theirs. Azazie appears at rows 1 and 8 of
 the same list ("AZAZIE SG PTE. LTD." and "AZAZIE SG PTE. LTD/ AZAZIE INC.") and
 their aggregation does not merge them, so a 15-credit company record is billed
-twice and a customer sees one buyer as two. `grouping_key` now cuts at an alias
-slash, while leaving Danish "A/S" suffixes alone.
+twice and a customer sees one buyer as two. `grouping_key` cuts at an alias
+slash, leaving Danish "A/S" suffixes alone, and `merge_rows()` sums the totals
+and unions the origin countries — two filings of one company are two parts of
+its trade, not two estimates of it.
 
 Cost of this segment: 7,592 company records is 113,880 credits, about $79 at
 Scale Pack rates, plus the one-off $499 setup. A 200-company pack is 3,000
