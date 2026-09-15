@@ -55,6 +55,13 @@ _GLUED_SUFFIX = re.compile(r"(?<=[A-Za-z])\.(?=[A-Za-z]{2,})")
 # everything after the first letter and yields "U.s.a.".
 _DOTTED_INITIALS = re.compile(r"^(?:[A-Za-z]\.){2,}[A-Za-z]?\.?$")
 
+# "AZAZIE SG PTE. LTD/ AZAZIE INC." is one buyer filed under two names, and the
+# vendor's own aggregation bills for it twice. The left side is the contracting
+# entity, so grouping cuts there. Both sides must be substantial: "MAERSK A/S"
+# is a Danish legal suffix, not two companies, and splitting it would invent a
+# company called "Maersk A".
+_ALIAS_SLASH = re.compile(r"^(?P<first>[^/]{3,}?)\s*/\s*(?P<rest>.{3,})$")
+
 _WS = re.compile(r"\s+")
 _PUNCT = re.compile(r"[.,]")
 _NON_NAME = re.compile(r"[^a-z0-9&\s-]")
@@ -152,6 +159,10 @@ def grouping_key(name: str | None, city: str | None, state: str | None, hs4: str
     """
     if not name or not hs4:
         return None
+
+    alias = _ALIAS_SLASH.match(name.strip())
+    if alias:
+        name = alias.group("first")
 
     base = _NON_NAME.sub(" ", _PUNCT.sub(" ", name.lower()))
     tokens = [t for t in _WS.sub(" ", base).strip().split(" ") if t]

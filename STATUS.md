@@ -165,6 +165,46 @@ profile advertises contact details and social links, but both were empty
 strings in their own brochure example, and the brochure calls them "contact
 placeholders". Do not price a pack around contact data that may not exist.
 
+### What "importer" means in their data — read before writing any site copy
+
+HS 6204, buyer country US, seller country Vietnam returns **7,592 importers**.
+The segment is easily big enough. What it contains is the problem:
+
+    AZAZIE SG PTE. LTD.             24,332 shipments   $5.28m   HQNAMDINH
+    DT UNIFORMS PTE. LTD.            4,624             $14.2m   CMYTHOIAG
+    SOUTH ISLAND GARMENT SDN. BHD    3,418             $16.2m   HQTTHUAN
+
+`PTE. LTD.` is Singapore and `SDN. BHD` is Malaysia, and every port code is
+Vietnamese — Nam Dinh, Cat Lai, Thu Dau Mot, Song Than in Binh Duong. This is
+**Vietnamese export customs data**, not US CBP manifest data, and the buyer
+named on an export declaration is whoever the factory invoiced: usually an
+offshore procurement arm rather than the US importer of record.
+
+The data is sound — per-piece values come out at $4.41 for uniforms and $141
+for bridal gowns, which is exactly right. But two things follow:
+
+* `/search` says "Every row is a real US company" and the pack is sold as "US
+  importer records". On this source that is false. The honest framing is
+  "companies buying into the US market", and the country column means
+  destination, not domicile. Fix the copy before launch, not after a refund
+  request.
+* Whether a US-domiciled buyer list exists at all depends on which source the
+  seller-country filter selects. Run the same search with seller country set
+  to All Countries: if the top names become Ross, TJX and Macy's, they hold
+  US import manifests too and switch source per filter. If it stays Singapore
+  holding companies, they only have counterparty data and the product has to
+  be described accordingly.
+
+Entity resolution is ours to do, not theirs. Azazie appears at rows 1 and 8 of
+the same list ("AZAZIE SG PTE. LTD." and "AZAZIE SG PTE. LTD/ AZAZIE INC.") and
+their aggregation does not merge them, so a 15-credit company record is billed
+twice and a customer sees one buyer as two. `grouping_key` now cuts at an alias
+slash, while leaving Danish "A/S" suffixes alone.
+
+Cost of this segment: 7,592 company records is 113,880 credits, about $79 at
+Scale Pack rates, plus the one-off $499 setup. A 200-company pack is 3,000
+credits, about $2.07.
+
 Full pricing: $499 setup (once); credit packs $59/25k, $79/50k, $199/200k,
 $690/1M, $1,950/5M; credits valid 12 months, extended by any later purchase;
 1,000 free trial credits on registration. Also seen outside the API: $99 per US

@@ -167,6 +167,25 @@ keys = {
 if len(keys) != 1:
     failures.append(f"  Indian legal-suffix variants must group together, got {keys}")
 
+# --- Aliased names, as filed on real Vietnamese export declarations ----------
+# Azazie appears twice in one 7,592-row buyer list, as "AZAZIE SG PTE. LTD."
+# (24,332 shipments) and "AZAZIE SG PTE. LTD/ AZAZIE INC." (3,184). The vendor
+# charges 15 credits per company record, so an unmerged alias is billed twice
+# and shows a customer one buyer as two.
+alias_keys = {
+    grouping_key(clean_company_name(n), "", "", "6204")
+    for n in ("AZAZIE SG PTE. LTD.", "AZAZIE SG PTE. LTD/ AZAZIE INC.")
+}
+if len(alias_keys) != 1:
+    failures.append(f"  aliased filings must group together, got {alias_keys}")
+
+# But a slash is not always an alias. A/S is a Danish legal suffix, and cutting
+# there would invent a company called "Maersk Line A".
+if grouping_key(clean_company_name("MAERSK LINE A/S"), "", "", "8901") == grouping_key(
+    clean_company_name("MAERSK LINE A"), "", "", "8901"
+):
+    failures.append("  'A/S' is a legal suffix, not an alias separator")
+
 if failures:
     print(f"\n{len(failures)} failure(s):\n")
     print("\n\n".join(failures))
