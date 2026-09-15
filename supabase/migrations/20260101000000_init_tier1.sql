@@ -130,6 +130,10 @@ comment on table public.orders is 'Stripe purchases. Service role only — no an
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
+-- Empty search_path: Supabase's database linter flags mutable search paths on
+-- trigger functions, because a caller-controlled path can change which objects
+-- an unqualified name resolves to.
+set search_path = ''
 as $$
 begin
   new.updated_at = now();
