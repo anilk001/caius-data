@@ -5,7 +5,6 @@ already importing under your HS code, then buy a one-time CSV of 200–500 buyer
 records. No subscription.
 
 - **Production:** [caiusdata.com](https://caiusdata.com)
-- **Defensive domain:** caiustrade.com → redirects to caiusdata.com
 
 ---
 

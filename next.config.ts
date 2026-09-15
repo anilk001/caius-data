@@ -5,14 +5,9 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   async redirects() {
     return [
-      // caiustrade.com is a defensive registration that points at the same
-      // Railway service; anything arriving on it is sent to the canonical host.
-      {
-        source: '/:path*',
-        has: [{ type: 'host', value: '(www\\.)?caiustrade\\.com' }],
-        destination: 'https://caiusdata.com/:path*',
-        permanent: true,
-      },
+      // Keep one canonical host. Serving the same pages on both the apex and
+      // www splits search ranking between them and makes the Stripe redirect
+      // URLs ambiguous.
       {
         source: '/:path*',
         has: [{ type: 'host', value: 'www\\.caiusdata\\.com' }],
