@@ -55,7 +55,7 @@ function renderHtml(input: DeliveryEmail): string {
           <h1 style="margin:0 0 12px 0;font-size:20px;line-height:1.3;">Your buyer pack is ready</h1>
           <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;color:#3f3f46;">
             Thanks for your order. Your <strong>${escapeHtml(input.packName)}</strong> pack contains
-            <strong>${input.recordCount}</strong> verified US importer records for
+            <strong>${input.recordCount}</strong> US importer ${input.recordCount === 1 ? 'company' : 'companies'} for
             <strong>${niche}</strong>, ranked by shipment volume.
           </p>
           <p style="margin:0 0 24px 0;">
@@ -91,7 +91,7 @@ function renderText(input: DeliveryEmail): string {
   return [
     'Your Caius Data buyer pack is ready.',
     '',
-    `Pack: ${input.packName} (${input.recordCount} US importer records)`,
+    `Pack: ${input.packName} (${input.recordCount} US importer companies)`,
     `HS code: ${input.hs4}${input.keyword ? ` · ${input.keyword}` : ''}`,
     `Paid: ${formatUsd(input.amountCents)} (one time)`,
     '',
@@ -116,7 +116,7 @@ export async function sendPackDeliveryEmail(input: DeliveryEmail) {
     from,
     to: input.to,
     ...(replyTo ? { replyTo } : {}),
-    subject: `Your ${input.recordCount} US buyer records (HS ${input.hs4}) are ready`,
+      subject: `Your ${input.recordCount} US buyer records (HS ${input.hs4}) are ready`,
     html: renderHtml(input),
     text: renderText(input),
   })

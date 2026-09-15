@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 export const metadata: Metadata = {
   title: 'Search US importers by HS code',
   description:
-    'Filter verified US importer companies by product keyword, HS4 code and port of entry. Free to search, 3 free sample rows, packs from $19.',
+    'Filter US importer companies by product keyword, HS4 code and port of entry. Free to search, 3 free sample rows, packs from $19.',
 }
 
 export default function SearchPage() {

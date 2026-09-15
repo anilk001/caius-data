@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     template: '%s · Caius Data',
   },
   description:
-    'Search verified US importers by HS code and buy a one-time CSV of 200–500 buyer companies. No subscription. From $19.',
+    'Search US importers by HS code and buy a one-time CSV of 200–500 buyer companies. No subscription. From $19.',
   keywords: [
     'US importer list',
     'HS code buyers',

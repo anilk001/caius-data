@@ -107,7 +107,7 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
   // --- 1. Claim the order ---------------------------------------------------
   const { data: existing, error: lookupError } = await admin
     .from('orders')
-    .select('id, status, csv_storage_path')
+    .select('id, status, csv_storage_path, record_count')
     .eq('stripe_session_id', sessionId)
     .maybeSingle()
 
@@ -129,7 +129,17 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
     const redelivered = await deliverExistingPack(
       existing.id,
       existing.csv_storage_path,
-      { email, filters, recordCount, packId, session },
+      {
+        email,
+        filters,
+        // The count of rows ACTUALLY in the stored file, not the pack's
+        // nominal size. A 200-pack whose filters matched 43 companies
+        // delivers 43, and the email must say 43 — the metadata figure is
+        // what was ordered, not what was sent.
+        recordCount: existing.record_count ?? recordCount,
+        packId,
+        session,
+      },
     )
     return { orderId: existing.id, resumedDelivery: true as const, ...redelivered }
   }
