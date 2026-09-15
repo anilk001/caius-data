@@ -75,18 +75,15 @@ export function PackPicker({
             <div
               key={pack.id}
               className={cn(
-                'bg-card relative flex flex-col gap-4 rounded-xl border p-5 transition-shadow',
+                'bg-card flex flex-col gap-4 rounded-xl border p-5 transition-shadow',
                 pack.highlight && 'border-brand/40 shadow-sm',
               )}
             >
-              {pack.highlight && (
-                <Badge variant="brand" className="absolute -top-2.5 right-4">
-                  Most popular
-                </Badge>
-              )}
-
               <div className="space-y-1">
-                <p className="text-sm font-medium">{pack.name}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium">{pack.name}</p>
+                  {pack.highlight && <Badge variant="brand">Most popular</Badge>}
+                </div>
                 <p className="flex items-baseline gap-1.5">
                   <span className="text-3xl font-semibold tracking-tight">
                     {formatUsd(pack.amountCents)}

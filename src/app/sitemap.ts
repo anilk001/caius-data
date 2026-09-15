@@ -24,3 +24,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   return [...staticPages, ...hsPages]
 }
+
+export const dynamic = 'force-dynamic'

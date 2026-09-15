@@ -49,6 +49,9 @@ export function SearchDashboard() {
   } | null>(null)
   const [sampling, setSampling] = useState(false)
   const [sampleError, setSampleError] = useState<string | null>(null)
+  // Bumped by the retry button. Clearing `result` alone would not re-run the
+  // effect, because queryString has not changed — it would hang on loading.
+  const [retryToken, setRetryToken] = useState(0)
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams()
@@ -108,7 +111,7 @@ export function SearchDashboard() {
 
     void run()
     return () => controller.abort()
-  }, [queryString])
+  }, [queryString, retryToken])
 
   const loading = result?.query !== queryString
   const data = result?.query === queryString ? result.data : null
@@ -253,7 +256,9 @@ export function SearchDashboard() {
               {hasFilters ? 'Matching US importers' : 'US importers'}
             </h2>
             <p className="text-muted-foreground text-sm">
-              {data?.total !== null && data?.total !== undefined ? (
+              {error ? (
+                'Results unavailable'
+              ) : data?.total !== null && data?.total !== undefined ? (
                 <>
                   ~{data.total.toLocaleString('en-US')} companies
                   {hsLabel ? ` · ${hsLabel}` : ''}
@@ -274,14 +279,25 @@ export function SearchDashboard() {
           </Button>
         </div>
 
-        {(error || sampleError) && (
+        {sampleError && (
           <p className="text-destructive text-sm" role="alert">
-            {error ?? sampleError}
+            {sampleError}
           </p>
         )}
 
         <div className="bg-card overflow-hidden rounded-xl border">
-          {!loading && rows.length === 0 && !error ? (
+          {error ? (
+            // An error replaces the table entirely. Rendering empty table
+            // chrome under a failure message reads as "we found nothing",
+            // which is a different and much worse claim than "we broke".
+            <ErrorState
+              message={error}
+              onRetry={() => {
+                setResult(null)
+                setRetryToken((n) => n + 1)
+              }}
+            />
+          ) : !loading && rows.length === 0 ? (
             <EmptyState hasFilters={hasFilters} />
           ) : (
             <>
@@ -307,6 +323,26 @@ export function SearchDashboard() {
         disabled={!applied.keyword?.trim() && !applied.hs4?.trim()}
         matchCount={data?.total ?? null}
       />
+    </div>
+  )
+}
+
+function ErrorState({
+  message,
+  onRetry,
+}: {
+  message: string
+  onRetry: () => void
+}) {
+  return (
+    <div className="px-6 py-16 text-center" role="alert">
+      <p className="font-medium">Search is not responding</p>
+      <p className="text-muted-foreground mx-auto mt-2 max-w-md text-sm leading-relaxed">
+        {message}
+      </p>
+      <Button variant="outline" size="sm" className="mt-5" onClick={onRetry}>
+        Try again
+      </Button>
     </div>
   )
 }

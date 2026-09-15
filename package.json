@@ -2,7 +2,7 @@
   "name": "caius-data",
   "version": "0.1.0",
   "private": true,
-  "description": "Caius Data — pay-as-you-go US importer buyer packs for Indian exporters.",
+  "description": "Caius Data \u2014 pay-as-you-go US importer buyer packs for Indian exporters.",
   "engines": {
     "node": ">=20.9.0"
   },
@@ -11,7 +11,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "test:python": "python3 scripts/test_company_cleaning.py",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run test:python"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -40,6 +43,7 @@
     "@types/react-dom": "^19.3.0",
     "eslint": "^9.20.0",
     "eslint-config-next": "^16.3.5",
+    "playwright": "^1.63.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3"
   }

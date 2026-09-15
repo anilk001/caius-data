@@ -35,6 +35,15 @@ create policy "companies are publicly readable"
 -- Purchases carry customer email addresses and download tokens. They are only
 -- ever read or written by server code using SUPABASE_SERVICE_ROLE_KEY.
 
+-- Grants. RLS decides which ROWS a role sees; grants decide whether it may
+-- touch the table at all. Both are needed — a policy on a table the role has
+-- no SELECT grant on still fails, and a grant with no policy returns nothing.
 revoke all on public.shipments from anon, authenticated;
 revoke all on public.orders    from anon, authenticated;
 grant select on public.companies to anon, authenticated;
+
+-- Supabase grants these to service_role by default, but stating them here keeps
+-- the migration self-describing and portable to a plain Postgres.
+grant all on public.companies to service_role;
+grant all on public.shipments to service_role;
+grant all on public.orders    to service_role;

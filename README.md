@@ -179,8 +179,12 @@ railway up
 should not cause Railway to cycle the container.
 
 After the first deploy, point `caiusdata.com` at the Railway domain in GoDaddy
-and set `NEXT_PUBLIC_SITE_URL=https://caiusdata.com` so Stripe redirects and
-email links resolve correctly.
+and set `SITE_URL=https://caiusdata.com` so Stripe redirects and email links
+resolve correctly.
+
+`SITE_URL` rather than `NEXT_PUBLIC_SITE_URL`: Next inlines `NEXT_PUBLIC_*` at
+**build** time, so a value added after the build would be silently ignored and
+Stripe would redirect buyers to localhost. `SITE_URL` is read at request time.
 
 ### Stripe webhook
 

@@ -3,6 +3,9 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, PublicCompany } from '@/types/database'
 import { PUBLIC_COMPANY_COLUMNS } from '@/types/database'
+import { isHs4, normalizeHs4 } from '@/lib/hs4'
+
+export { normalizeHs4 }
 
 export const MAX_SEARCH_LIMIT = 500
 
@@ -32,13 +35,6 @@ export interface SearchResult {
  */
 function sanitizeKeyword(raw: string): string {
   return raw.replace(/["\\]/g, ' ').trim().slice(0, 120)
-}
-
-/** Keep only a clean 4-digit HS chapter, or nothing. */
-export function normalizeHs4(raw: string | null | undefined): string | null {
-  if (!raw) return null
-  const digits = raw.replace(/\D/g, '')
-  return digits.length >= 4 ? digits.slice(0, 4) : null
 }
 
 /**
@@ -72,7 +68,7 @@ export async function searchCompanies(
     // A bare 4-digit keyword is almost always someone typing an HS code into
     // the wrong box; treat it as one rather than returning nothing.
     const asHs4 = normalizeHs4(keyword)
-    if (!hs4 && asHs4 && /^\d{4}$/.test(keyword)) {
+    if (!hs4 && asHs4 && isHs4(keyword)) {
       query = query.eq('hs4_code', asHs4)
     } else {
       query = query.textSearch('search_tsv', keyword, {

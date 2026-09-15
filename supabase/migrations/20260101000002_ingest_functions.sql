@@ -19,6 +19,10 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+-- The OUT parameters are named `company_key` and `id`, which collide with the
+-- columns of the same name in `on conflict (company_key)`. Without this
+-- pragma PL/pgSQL raises "column reference is ambiguous" at runtime.
+#variable_conflict use_column
 begin
   return query
   with incoming as (
