@@ -23,6 +23,9 @@ _SUFFIXES = (
     "incorporated", "inc", "corporation", "corp", "company", "co",
     "limited", "ltd", "llc", "l l c", "lp", "llp", "plc", "pllc",
     "holdings", "holding", "group", "intl", "international",
+    # This trade lane is India and South-East Asia, so their legal suffixes
+    # matter as much as the US ones for collapsing name variants.
+    "pvt", "private", "pte",
 )
 
 # Broker / consignee noise that rides along in the name field.
@@ -42,6 +45,16 @@ _PLACEHOLDER_NAMES = {
     "same as consignee", "consignee", "not available", "notify party",
 }
 
+# "PVT.LTD." is one token to a title-caser, which renders it "Pvt.ltd" — not a
+# name to put in front of a paying customer. Split a full stop that sits between
+# two letters only when what follows is a word rather than an initial, so
+# "PVT.LTD" opens up but "J.P. MORGAN" and "U.S.A." are left alone.
+_GLUED_SUFFIX = re.compile(r"(?<=[A-Za-z])\.(?=[A-Za-z]{2,})")
+
+# Dotted initials: U.S.A., J.P., A.B.C. A plain title-caser lower-cases
+# everything after the first letter and yields "U.s.a.".
+_DOTTED_INITIALS = re.compile(r"^(?:[A-Za-z]\.){2,}[A-Za-z]?\.?$")
+
 _WS = re.compile(r"\s+")
 _PUNCT = re.compile(r"[.,]")
 _NON_NAME = re.compile(r"[^a-z0-9&\s-]")
@@ -58,7 +71,7 @@ def clean_company_name(raw: str | None) -> str | None:
     if not raw:
         return None
 
-    name = _WS.sub(" ", str(raw)).strip()
+    name = _WS.sub(" ", _GLUED_SUFFIX.sub(". ", str(raw))).strip()
     if name.lower() in _PLACEHOLDER_NAMES:
         return None
 
@@ -89,6 +102,7 @@ _FIXED_CASE = {
     "llc": "LLC", "l.l.c": "LLC", "llp": "LLP", "lp": "LP", "plc": "PLC",
     "pllc": "PLLC", "usa": "USA", "us": "US", "uk": "UK", "na": "NA",
     "inc": "Inc", "ltd": "Ltd", "corp": "Corp", "co": "Co", "intl": "Intl",
+    "pvt": "Pvt", "pte": "Pte", "private": "Private",
     "and": "and", "of": "of", "the": "the", "for": "for", "de": "de",
 }
 
@@ -108,6 +122,10 @@ def _title_case(name: str) -> str:
             if index == 0 and stripped in _MINOR_WORDS:
                 fixed = fixed.capitalize()
             words.append(fixed)
+            continue
+
+        if _DOTTED_INITIALS.match(word):
+            words.append(word.upper())
             continue
 
         # Vowel-free short tokens are almost always acronyms: NY, BMW, HDFC.

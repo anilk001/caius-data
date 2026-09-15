@@ -145,6 +145,28 @@ check(
 )
 
 
+# --- Glued legal suffixes and dotted initials --------------------------------
+# Indian and Singaporean filers write "PVT.LTD." with no space. Title-cased as
+# one token that becomes "Pvt.ltd", which is not a name to sell to anyone.
+for raw, expected in [
+    ("INDITEX TRENT RETAIL INDIA PVT.LTD.", "Inditex Trent Retail India Pvt Ltd"),
+    ("ACME PTE.LTD.", "Acme Pte Ltd"),
+    ("J.P.MORGAN CHASE", "J.P. Morgan Chase"),
+    ("U.S.A. IMPORTS INC", "U.S.A. Imports Inc"),
+    ("A.B.C. TEXTILES L.L.C.", "A.B.C. Textiles LLC"),
+]:
+    got = clean_company_name(raw)
+    if got != expected:
+        failures.append(f"  {raw!r}\n    expected {expected!r}\n    got      {got!r}")
+
+# The Indian suffixes must collapse variants the same way the US ones do.
+keys = {
+    grouping_key(clean_company_name(n), "", "", "6204")
+    for n in ("ORIENT CRAFT PVT.LTD.", "ORIENT CRAFT PRIVATE LIMITED", "ORIENT CRAFT LTD")
+}
+if len(keys) != 1:
+    failures.append(f"  Indian legal-suffix variants must group together, got {keys}")
+
 if failures:
     print(f"\n{len(failures)} failure(s):\n")
     print("\n\n".join(failures))

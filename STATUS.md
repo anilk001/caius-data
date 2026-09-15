@@ -142,9 +142,28 @@ worth buying for the companies a pack actually sells, because it is reusable
 across every later pack that company appears in, and it is what lets us build
 the origin-country filter ourselves at shipment granularity.
 
-Unverified: whether All Importers accepts `hs_codes` + `export_countries`
-together. If it does, "US importers of 6204 sourcing from Vietnam" is one paid
-call. That is the whole product, so check it before anything else.
+Their filter panel offers import country and export country, so the origin
+filter the packs are sold on is available on the paid side, not just in the
+free `search-filters` response. Still to pin down from the docs: the exact
+parameter names and whether both can be combined with `hs_codes` in one call.
+
+`scripts/bold_company_records.py` maps their company record onto a `companies`
+row and filters by origin locally, so the pack can be built either way — one
+filtered call if the API takes both, or a broad call filtered here if not.
+
+Note what an aggregated company record does **not** carry: no HS code (the
+heading is implied by the query you paid for) and no address, city or state —
+only a country. `companies.company_key` is (name, city, state, hs4), so these
+rows key on name and heading alone. That is still unique, but the dashboard's
+state filter will not find them and the CSV's City/State column will be blank.
+City and state live on `consignee_address` in the shipment record at 2 credits,
+so they are a second purchase rather than a parsing problem. Decide whether a
+pack needs them before quoting a price.
+
+Also worth testing on free credits before relying on it: the 20-credit company
+profile advertises contact details and social links, but both were empty
+strings in their own brochure example, and the brochure calls them "contact
+placeholders". Do not price a pack around contact data that may not exist.
 
 Full pricing: $499 setup (once); credit packs $59/25k, $79/50k, $199/200k,
 $690/1M, $1,950/5M; credits valid 12 months, extended by any later purchase;
