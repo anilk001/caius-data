@@ -8,6 +8,9 @@ records. No subscription.
 
 ---
 
+> **Picking this up cold?** Read [`STATUS.md`](STATUS.md) first — what works,
+> what is missing, and the regulatory finding that shapes the whole data model.
+
 ## Stack
 
 | Layer | Choice |

@@ -1,0 +1,121 @@
+# Caius Data — current state
+
+Written 15 September 2026. Read this first if you are picking the project up
+without the conversation that built it.
+
+---
+
+## What works, end to end
+
+A real Stripe payment produced a real CSV in 71 seconds, verified from the
+database rather than the screen.
+
+```
+/search → /api/checkout → Stripe → /api/webhooks/stripe
+        → CSV built → private Supabase bucket → 7-day signed link → email
+```
+
+| | |
+| --- | --- |
+| Live URL | https://web-production-aa1c3.up.railway.app |
+| Repo branch | `claude/caius-data-tier-1-launch-o6a54x` |
+| Supabase | project `npwcvpvayaovpjhcmzkz`, region `ap-southeast-1` |
+| Railway | project `caius-data`, service `web`, auto-deploys on push |
+| Email | `mail.caiusdata.com`, verified, sending key scoped to that domain |
+
+Verified against the live database: RLS blocks anon from `shipments` and
+`orders`; the free 3-row sample works; webhook signature verification works;
+re-ingest sums shipment counts correctly; a replayed `source_row_hash` inserts
+nothing.
+
+## The one thing missing
+
+**Real data.** `companies` holds 16 rows whose names begin `[TEST]` — all
+invented, all to be deleted the moment genuine manifest data lands.
+
+---
+
+## The finding that shapes everything
+
+**The public US manifest feed contains no HS codes.**
+
+19 CFR 103.31(e)(3) lists the 22 data elements CBP releases. A tariff
+classification is not among them — the source gives `Description of goods` as
+free text and nothing more. A provider sample confirmed it: 46 columns matching
+the regulation element for element, with `Hscode` populated in **1 row of 85**.
+
+Caius Data is keyed on HS4, so HS4 is now derived from the goods description
+(`scripts/hs4_classifier.py`) and labelled as derived everywhere it appears —
+`companies.hs4_source`, `companies.hs4_confidence`, and an "HS4 Source" column
+in both the free sample and the paid CSV.
+
+The same regulation explains two other things:
+
+* **No city or state.** One combined `Consignee address` field, hence
+  `scripts/address_parser.py`. This matters beyond the UI: city and state form
+  part of the key that merges a company's rows, so without them every shipment
+  becomes its own "company" and the volume ranking collapses.
+* **Coverage has structural holes.** Importers may file for confidentiality
+  under 103.31(d) for renewable two-year periods, and those rows arrive with the
+  consignee blanked. Never claim completeness.
+
+---
+
+## Open questions for the data vendor
+
+Being evaluated: billofladingdata.com. Nothing purchased.
+
+1. **Does the licence permit redistribution?** Unanswered, and it decides
+   everything. Their published terms cover rate limits and key security and say
+   nothing about what you may do with records once you have them. Silence is not
+   permission.
+2. **How is their `hs_codes` filter derived,** given the source has no HS codes
+   and their own sample's column was empty? If they infer it from descriptions,
+   their per-HS-code pricing is selling inference we now do ourselves.
+3. **Does the US country-specific API carry structured city/state fields?**
+4. Do credits expire? What are the rate limits?
+
+Pricing seen so far: $99 per US HS code (lifetime, unlimited); $299/month for a
+1-seat "lead building" plan; $499 API setup plus credit packs from $59/25k to
+$1,950/5M. Credits run 1 per shipment record, 15 per company record, 20 per
+company profile.
+
+Buying **shipment** records and aggregating locally is 15× cheaper than buying
+their company records, and the ingest already does that aggregation.
+
+---
+
+## Before taking a real payment
+
+* Delete the `[TEST]` rows. `/search` claims "Every row is a real US company",
+  which is currently false.
+* Fill in `OPERATOR` in `src/components/legal-page.tsx` — the registered agent
+  line is a placeholder, and `legalName` must match the Articles of Organization.
+* Rotate every secret that passed through a chat transcript:
+  `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, and the Stripe keys.
+* Create a **live-mode** Stripe webhook endpoint with its own `whsec_`. Test and
+  live are separate worlds, and forgetting this is the classic launch-day bug.
+* Point `caiusdata.com` at Railway and set `SITE_URL` to it. Use `SITE_URL`, not
+  `NEXT_PUBLIC_SITE_URL` — the latter is baked in at build time.
+* Upgrade Supabase to Pro. Free projects pause after 7 days of inactivity, and
+  there are no backups.
+* Prices in `src/lib/packs.ts` are provisional, pending market research.
+
+---
+
+## Running it
+
+```bash
+npm install
+npm run check          # typecheck, lint, 24 node tests, 3 Python suites
+npm run build
+npm run dev
+```
+
+Ingest: `python scripts/ingest_csv.py <file.csv> --dry-run` first, always. It
+auto-detects column names across providers and prints what it matched before
+writing anything. `--map field=Column` overrides.
+
+`supabase/README.md` covers migrations. `README.md` covers architecture and the
+reasoning behind the blurred-column design (the blur is decoration; the real
+gate is server-side).
