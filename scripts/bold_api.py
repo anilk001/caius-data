@@ -12,6 +12,9 @@ to originate somewhere with real egress.
     python scripts/bold_api.py filters --type imp --hs 620442 \\
         --origin INDIA --codes-out data/6204-codes.json
 
+    # Free: which endpoint names actually exist? (404 vs 400 tells you)
+    python scripts/bold_api.py probe
+
     # Any endpoint, body from the command line, response saved to disk
     python scripts/bold_api.py call shipment-records \\
         --body '{"type":"imp","hs_codes":["6204"],"limit":500}' \\
@@ -230,6 +233,101 @@ def report_countries(data, origin: str | None) -> None:
         print("  no matching export country in this response")
 
 
+# --- Finding the endpoints ---------------------------------------------------
+#
+# The brochure names ten API modules but not their URL slugs, and a wrong slug
+# is indistinguishable from a broken key until you look at the status code.
+# Happily the API tells us for free: search-filters answers a bodyless request
+# with
+#
+#     {"code": 400, "message": "Either hs_codes, products or company_id must
+#      be provided."}
+#
+# A 400 means the route exists and validated our (empty) body. A 404 means it
+# does not. Neither returns records, and credits are only charged on records
+# returned — so the whole surface can be mapped without spending anything.
+
+CANDIDATE_ENDPOINTS = [
+    # Free discovery modules, named on page 2 of the brochure.
+    "search-filters",
+    "shipping-filters",
+    "insights",
+    "products",
+    "company-search",
+    "check-logistics-company",
+    # Paid extraction modules. Probing costs nothing; calling them does.
+    "shipping-records",
+    "shipment-records",
+    "global-shipping-records",
+    "country-shipping-records",
+    "us-shipping-records",
+    "all-importers",
+    "all-exporters",
+    "competitors",
+    "company-details",
+]
+
+
+def probe_endpoint(endpoint: str) -> tuple[int, str]:
+    """
+    Ask whether an endpoint exists, without asking it for anything.
+
+    Deliberately bypasses post(): that helper exits the process on an HTTP
+    error, which is right for a real call and useless for a probe, where the
+    error code IS the answer.
+    """
+    request = urllib.request.Request(
+        f"{BASE_URL}/{endpoint}",
+        data=b"{}",
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "api-key": _key(),
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+            body = response.read().decode("utf-8", "ignore")
+            return response.status, body[:200]
+    except urllib.error.HTTPError as err:
+        return err.code, err.read().decode("utf-8", "ignore")[:200]
+    except urllib.error.URLError as err:
+        return 0, str(err.reason)
+
+
+def cmd_probe(args: argparse.Namespace) -> None:
+    endpoints = args.endpoint or CANDIDATE_ENDPOINTS
+    print(f"Probing {len(endpoints)} endpoint(s) with an empty body.")
+    print("400/422 = exists, 404 = does not, 401/403 = key problem.\n")
+
+    found: list[str] = []
+    for endpoint in endpoints:
+        status, detail = probe_endpoint(endpoint)
+        if status == 404:
+            verdict = "no such endpoint"
+        elif status in (400, 422):
+            verdict = "EXISTS"
+            found.append(endpoint)
+        elif status in (401, 403):
+            verdict = "auth rejected — check BOLD_API_KEY"
+        elif status == 429:
+            verdict = "rate limited, slow down"
+        elif status == 200:
+            # A 200 to an empty body means it accepted the request. If that
+            # returned records, it just cost credits — worth shouting about.
+            verdict = "EXISTS (returned 200 — check whether this spent credits)"
+            found.append(endpoint)
+        else:
+            verdict = "unexpected"
+        print(f"  {status:<5} {endpoint:<26} {verdict}")
+        if status not in (404,) and detail:
+            print(f"        {detail.strip()[:150]}")
+        time.sleep(args.delay)
+
+    print(f"\n{len(found)} endpoint(s) exist: {', '.join(found) or 'none'}")
+
+
 def cmd_filters(args: argparse.Namespace) -> None:
     body: dict = {"type": args.type}
     if args.hs:
@@ -375,6 +473,11 @@ def main() -> int:
     c.add_argument("--body", required=True, help="Request body as JSON")
     c.add_argument("--out", required=True, help="Where to save the response")
     c.set_defaults(func=cmd_call)
+
+    p = sub.add_parser("probe", help="Free: find which endpoint names exist")
+    p.add_argument("endpoint", nargs="*", help="Names to try (default: the brochure's modules)")
+    p.add_argument("--delay", type=float, default=1.5, help="Seconds between probes")
+    p.set_defaults(func=cmd_probe)
 
     i = sub.add_parser("inspect", help="Summarise a saved response (no credits)")
     i.add_argument("path")

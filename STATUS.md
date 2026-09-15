@@ -99,13 +99,57 @@ survivors to the records endpoint. `scripts/bold_api.py filters --hs 620442
 --codes-out codes.json` does the filtering and prints what it dropped;
 `refine` re-runs it against a saved response for free.
 
-Pricing seen so far: $99 per US HS code (lifetime, unlimited); $299/month for a
-1-seat "lead building" plan; $499 API setup plus credit packs from $59/25k to
-$1,950/5M. Credits run 1 per shipment record, 15 per company record, 20 per
-company profile.
+### The endpoints, and where they are documented
 
-Buying **shipment** records and aggregating locally is 15× cheaper than buying
-their company records, and the ingest already does that aggregation.
+The API docs are a portal, not a file:
+
+* All modules: `tradedata.billofladingdata.com/supplier/api-documentation?tab=documentation`
+* USA: same URL with `?tab=country-specific-api-documentation&country=us`
+
+Their brochure (page 2) names ten modules and splits them free from paid:
+
+| Free | Paid |
+| --- | --- |
+| Search Filters | Global Shipping Records — 1 credit/record |
+| Shipping Filters | Country-Specific USA/India — **2** credits/record |
+| Insights | All Importers / Exporters / Competitors — 15 credits/record |
+| Products | Company Details profile — 20 credits/profile |
+| Company Search | |
+| Check Logistics Company | |
+
+Slugs are not published, so `scripts/bold_api.py probe` maps them: an empty body
+draws a 400 from a route that exists and a 404 from one that does not, returns no
+records either way, and credits are only charged on records returned.
+
+The USA field list (brochure page 7) includes `hs_code`, `hs_code_desc`,
+`consignee_address`, `carrier_name`, `vessel_name` and `container_number` — well
+beyond the 22 elements of 19 CFR 103.31, so they are enriching from somewhere.
+The address still arrives as one blob, so `address_parser.py` stays. The HS
+column in their own sample XLSX was empty, so `hs4_classifier.py` stays too, as
+the fallback for rows where "where available" turns out to mean absent.
+
+### Cost of a pack — correcting an earlier note
+
+An earlier version of this file said buying shipment records and aggregating
+locally is "15x cheaper" than buying company records. That was wrong. It assumed
+1 credit per US record (it is 2) and ignored shipments per company. The real
+break-even is 7.5 shipments per company, and any real importer ships far more
+than that, so for a buyer pack **their company record is the cheaper path**.
+
+200 company records = 3,000 credits = about **$2 per pack** at Scale Pack rates
+($690/1M credits), against a $19-49 price. Shipment-level extraction is still
+worth buying for the companies a pack actually sells, because it is reusable
+across every later pack that company appears in, and it is what lets us build
+the origin-country filter ourselves at shipment granularity.
+
+Unverified: whether All Importers accepts `hs_codes` + `export_countries`
+together. If it does, "US importers of 6204 sourcing from Vietnam" is one paid
+call. That is the whole product, so check it before anything else.
+
+Full pricing: $499 setup (once); credit packs $59/25k, $79/50k, $199/200k,
+$690/1M, $1,950/5M; credits valid 12 months, extended by any later purchase;
+1,000 free trial credits on registration. Also seen outside the API: $99 per US
+HS code lifetime, and $299/month for a 1-seat "lead building" plan.
 
 ---
 
