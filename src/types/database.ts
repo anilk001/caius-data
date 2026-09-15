@@ -21,6 +21,9 @@ export type CompanyRow = {
   state: string | null
   country: string | null
   hs4_code: string
+  /** 'declared' = the filer stated it; 'derived' = inferred from the description. */
+  hs4_source: 'declared' | 'derived' | null
+  hs4_confidence: number | null
   product_description: string | null
   primary_port: string | null
   first_seen: string | null
@@ -123,6 +126,7 @@ export const PUBLIC_COMPANY_COLUMNS = [
   'state',
   'country',
   'hs4_code',
+  'hs4_source',
   'product_description',
   'primary_port',
   'first_seen',

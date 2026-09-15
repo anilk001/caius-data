@@ -2,7 +2,7 @@
   "name": "caius-data",
   "version": "0.1.0",
   "private": true,
-  "description": "Caius Data — pay-as-you-go US importer buyer packs for Indian exporters.",
+  "description": "Caius Data \u2014 pay-as-you-go US importer buyer packs for Indian exporters.",
   "engines": {
     "node": ">=20.9.0"
   },
@@ -13,7 +13,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
-    "test:python": "python3 scripts/test_company_cleaning.py",
+    "test:python": "python3 scripts/test_company_cleaning.py && python3 scripts/test_hs4_classifier.py",
     "check": "npm run typecheck && npm run lint && npm run test && npm run test:python"
   },
   "dependencies": {

@@ -37,6 +37,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from hs4_classifier import MIN_CONFIDENCE, classify_hs4  # noqa: E402
 from company_cleaning import (  # noqa: E402
     clean_company_name,
     clean_hs4,
@@ -174,6 +175,8 @@ class CompanyAggregate:
     country: str = "US"
     descriptions: Counter = field(default_factory=Counter)
     ports: Counter = field(default_factory=Counter)
+    hs4_source: str = "derived"
+    hs4_confidence: float | None = None
     first_seen: date | None = None
     last_seen: date | None = None
     shipment_count: int = 0
@@ -227,6 +230,8 @@ class CompanyAggregate:
             "first_seen": self.first_seen.isoformat() if self.first_seen else None,
             "last_seen": self.last_seen.isoformat() if self.last_seen else None,
             "shipment_count": self.shipment_count,
+            "hs4_source": self.hs4_source,
+            "hs4_confidence": self.hs4_confidence,
         }
 
 
@@ -236,6 +241,8 @@ class Stats:
     skipped_no_name: int = 0
     skipped_no_hs4: int = 0
     skipped_duplicate: int = 0
+    hs4_derived: int = 0
+    hs4_underivable: int = 0
     companies: int = 0
     shipments_written: int = 0
 
@@ -245,6 +252,8 @@ class Stats:
             f"  skipped (no name)    {self.skipped_no_name:>8,}\n"
             f"  skipped (no HS4)     {self.skipped_no_hs4:>8,}\n"
             f"  skipped (duplicate)  {self.skipped_duplicate:>8,}\n"
+            f"  HS4 derived          {self.hs4_derived:>8,}\n"
+            f"  HS4 underivable      {self.hs4_underivable:>8,}\n"
             f"  companies upserted   {self.companies:>8,}\n"
             f"  shipments written    {self.shipments_written:>8,}"
         )
@@ -308,6 +317,22 @@ def main() -> int:
     parser.add_argument(
         "--hs4",
         help="Force this HS4 code for every row (use when the export has no HS column)",
+    )
+    parser.add_argument(
+        "--no-derive-hs4",
+        action="store_true",
+        help=(
+            "Do not infer HS4 from the goods description. The public CBP manifest "
+            "feed carries no tariff classification (19 CFR 103.31(e)(3)), so most "
+            "rows are skipped without derivation."
+        ),
+    )
+    parser.add_argument(
+        "--min-hs4-confidence",
+        type=float,
+        default=None,
+        metavar="0.0-1.0",
+        help="Override the classifier's confidence floor for accepting a derived code",
     )
     parser.add_argument(
         "--map",
@@ -399,8 +424,21 @@ def main() -> int:
                 f"  --map company_name='Consignee'"
             )
         if not columns.get("hs_code") and not forced_hs4:
-            sys.exit(
-                "\nCannot continue: no HS code column found and --hs4 not given."
+            if args.no_derive_hs4:
+                sys.exit(
+                    "\nCannot continue: no HS code column, no --hs4, and derivation "
+                    "disabled with --no-derive-hs4."
+                )
+            if not columns.get("product_description"):
+                sys.exit(
+                    "\nCannot continue: no HS code column and no goods description "
+                    "to derive one from. Use --map product_description='<column>'."
+                )
+            print(
+                "\n  note: no HS code column. The public CBP manifest feed carries no\n"
+                "        tariff classification (19 CFR 103.31(e)(3)), so HS4 will be\n"
+                "        DERIVED from the goods description and labelled as such.\n"
+                "        Rows the classifier is unsure about are skipped, not guessed."
             )
 
         def cell(row: dict[str, str], field_name: str) -> str | None:
@@ -418,7 +456,29 @@ def main() -> int:
                 stats.skipped_no_name += 1
                 continue
 
+            description = clean_text(cell(row, "product_description"))
+
+            # Priority: an explicit --hs4, then a code the export actually
+            # carries, then inference from the goods description.
             hs4 = forced_hs4 or clean_hs4(cell(row, "hs_code"))
+            hs4_source = "declared" if hs4 else None
+            hs4_confidence = None
+
+            if not hs4 and not args.no_derive_hs4:
+                verdict = classify_hs4(description)
+                threshold = (
+                    args.min_hs4_confidence
+                    if args.min_hs4_confidence is not None
+                    else MIN_CONFIDENCE
+                )
+                if verdict.hs4 and verdict.confidence >= threshold:
+                    hs4 = verdict.hs4
+                    hs4_source = verdict.source
+                    hs4_confidence = verdict.confidence
+                    stats.hs4_derived += 1
+                else:
+                    stats.hs4_underivable += 1
+
             if not hs4:
                 stats.skipped_no_hs4 += 1
                 continue
@@ -429,7 +489,6 @@ def main() -> int:
             # country column, US is the correct default.
             country = clean_text(cell(row, "country"), 60) or "US"
             address = clean_text(cell(row, "address"), 300)
-            description = clean_text(cell(row, "product_description"))
             port_unlading = clean_text(cell(row, "port_of_unlading"), 120)
             arrival = parse_date(cell(row, "arrival_date"))
 
@@ -441,7 +500,13 @@ def main() -> int:
             aggregate = aggregates.get(key)
             if aggregate is None:
                 aggregate = CompanyAggregate(
-                    name=name, hs4=hs4, city=city, state=state, country=country
+                    name=name,
+                    hs4=hs4,
+                    city=city,
+                    state=state,
+                    country=country,
+                    hs4_source=hs4_source or "derived",
+                    hs4_confidence=hs4_confidence,
                 )
                 aggregates[key] = aggregate
 

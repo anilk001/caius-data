@@ -37,11 +37,14 @@ begin
       nullif(btrim(coalesce(r.primary_port, '')), '')        as primary_port,
       r.first_seen,
       r.last_seen,
-      coalesce(r.shipment_count, 0)       as shipment_count
+      coalesce(r.shipment_count, 0)       as shipment_count,
+      coalesce(nullif(btrim(coalesce(r.hs4_source, '')), ''), 'derived') as hs4_source,
+      r.hs4_confidence
     from jsonb_to_recordset(payload) as r (
       name text, address text, city text, state text, country text,
       hs4_code text, product_description text, primary_port text,
-      first_seen date, last_seen date, shipment_count int
+      first_seen date, last_seen date, shipment_count int,
+      hs4_source text, hs4_confidence numeric
     )
     where btrim(coalesce(r.name, '')) <> ''
       and btrim(coalesce(r.hs4_code, '')) ~ '^[0-9]{4}$'
@@ -63,17 +66,21 @@ begin
       (array_agg(primary_port) filter (where primary_port is not null))[1] as primary_port,
       min(first_seen) as first_seen,
       max(last_seen)  as last_seen,
-      sum(shipment_count)::int as shipment_count
+      sum(shipment_count)::int as shipment_count,
+      (array_agg(hs4_source order by case hs4_source when 'declared' then 0 else 1 end))[1] as hs4_source,
+      max(hs4_confidence) as hs4_confidence
     from incoming
     group by lower(name), lower(coalesce(city, '')), lower(coalesce(state, '')), hs4_code
   ),
   upserted as (
     insert into public.companies as c (
       name, address, city, state, country, hs4_code,
-      product_description, primary_port, first_seen, last_seen, shipment_count
+      product_description, primary_port, first_seen, last_seen, shipment_count,
+      hs4_source, hs4_confidence
     )
     select d.name, d.address, d.city, d.state, d.country, d.hs4_code,
-           d.product_description, d.primary_port, d.first_seen, d.last_seen, d.shipment_count
+           d.product_description, d.primary_port, d.first_seen, d.last_seen, d.shipment_count,
+           d.hs4_source, d.hs4_confidence
     from deduped d
     on conflict (company_key) do update set
       address             = coalesce(excluded.address, c.address),
@@ -81,7 +88,11 @@ begin
       primary_port        = coalesce(excluded.primary_port, c.primary_port),
       first_seen          = least(coalesce(c.first_seen, excluded.first_seen), excluded.first_seen),
       last_seen           = greatest(coalesce(c.last_seen, excluded.last_seen), excluded.last_seen),
-      shipment_count      = c.shipment_count + excluded.shipment_count
+      shipment_count      = c.shipment_count + excluded.shipment_count,
+      -- A declared code always outranks a derived one.
+      hs4_source          = case when c.hs4_source = 'declared' or excluded.hs4_source = 'declared'
+                                 then 'declared' else 'derived' end,
+      hs4_confidence      = greatest(coalesce(c.hs4_confidence, 0), coalesce(excluded.hs4_confidence, 0))
     returning c.company_key, c.id
   )
   select u.company_key, u.id from upserted u;

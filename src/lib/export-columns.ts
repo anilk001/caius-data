@@ -11,6 +11,10 @@ export const SAMPLE_COLUMNS: CsvColumn<PublicCompany>[] = [
   { header: 'State', value: (r) => r.state },
   { header: 'Country', value: (r) => r.country ?? 'US' },
   { header: 'HS4 Code', value: (r) => r.hs4_code },
+  {
+    header: 'HS4 Source',
+    value: (r) => (r.hs4_source === 'declared' ? 'declared by filer' : 'derived from description'),
+  },
   { header: 'Product Description', value: (r) => r.product_description },
   { header: 'Shipments Observed', value: (r) => r.shipment_count ?? 0 },
   { header: 'Street Address', value: () => '[included in paid pack]' },
@@ -27,6 +31,17 @@ export const PACK_COLUMNS: CsvColumn<CompanyRow>[] = [
   { header: 'State', value: (r) => r.state },
   { header: 'Country', value: (r) => r.country ?? 'US' },
   { header: 'HS4 Code', value: (r) => r.hs4_code },
+  // The public CBP manifest feed carries no tariff classification
+  // (19 CFR 103.31(e)(3)), so most codes are inferred from the goods
+  // description. Saying so in the file is the difference between a buyer
+  // checking our working and a buyer feeling misled.
+  {
+    header: 'HS4 Source',
+    value: (r) =>
+      r.hs4_source === 'declared'
+        ? 'declared by filer'
+        : `derived from description${r.hs4_confidence ? ` (confidence ${Number(r.hs4_confidence).toFixed(2)})` : ''}`,
+  },
   { header: 'Product Description', value: (r) => r.product_description },
   { header: 'Port of Entry', value: (r) => r.primary_port },
   { header: 'Shipments Observed', value: (r) => r.shipment_count ?? 0 },
