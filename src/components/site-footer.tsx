@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Logo } from '@/components/logo'
+import { OPERATOR } from '@/components/legal-page'
 
 const YEAR = new Date().getFullYear()
 
@@ -14,8 +15,8 @@ export function SiteFooter() {
             your buyer list, keep it forever.
           </p>
           <p className="text-muted-foreground text-xs leading-relaxed">
-            Caius Data is operated by Caius Data LLC, a limited liability company
-            registered in the State of Wyoming, United States.
+            Caius Data is operated by {OPERATOR.legalName}, a limited liability
+            company registered in the {OPERATOR.jurisdiction}.
           </p>
         </div>
 
@@ -72,7 +73,9 @@ export function SiteFooter() {
 
       <div className="border-t">
         <div className="text-muted-foreground mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 text-xs sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p>© {YEAR} Caius Data LLC · Wyoming, USA</p>
+          <p>
+            © {YEAR} {OPERATOR.legalName} · {OPERATOR.shortJurisdiction}
+          </p>
           <p>
             Data derived from public US Customs (CBP) vessel manifest records.
             Company-level information only.
