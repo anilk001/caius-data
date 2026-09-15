@@ -109,8 +109,18 @@ export function OrderStatus() {
             <>
               {state.recordCount ?? ''} US importer records
               {state.hs4 && state.hs4 !== '0000' ? ` for HS ${state.hs4}` : ''}, with
-              street address and port of entry unlocked. We also emailed this link
-              to {state.email ?? 'your inbox'}.
+              street address and port of entry unlocked.
+              {/*
+                Only claim the email was sent once the order is actually
+                `delivered`. A pack can be fulfilled and downloadable while the
+                mail fails, and telling someone to check an inbox that will
+                never receive anything is worse than saying nothing.
+              */}
+              {state.status === 'delivered' ? (
+                <> We also emailed this link to {state.email ?? 'your inbox'}.</>
+              ) : (
+                <> Download it here — save the file, as the emailed copy may not arrive.</>
+              )}
             </>
           ) : stalled ? (
             'This is taking longer than usual. Your payment went through and the file will arrive by email shortly — nothing is lost.'

@@ -7,6 +7,7 @@ import { searchCompanies } from '@/lib/search'
 import { checkoutSchema } from '@/lib/validation'
 import { siteUrl } from '@/lib/env'
 import { formatUsd } from '@/lib/utils'
+import { getConfigStatus } from '@/lib/config-status'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -39,6 +40,26 @@ export async function POST(request: NextRequest) {
   const pack = getPack(packId)
   if (!pack) {
     return NextResponse.json({ error: 'Unknown pack.' }, { status: 400 })
+  }
+
+  // Fail before Stripe rather than inside it. Without this the missing-key
+  // error surfaces as an opaque 500 the buyer cannot act on, and which takes
+  // a trip through the server logs to diagnose.
+  const config = getConfigStatus()
+  if (!config.canTakeOrders) {
+    console.error(
+      '[api/checkout] refusing checkout, service not configured:',
+      [...config.database.missing, ...config.payments.missing].join(', '),
+    )
+    return NextResponse.json(
+      {
+        error:
+          'Checkout is temporarily unavailable and you have not been charged. ' +
+          'Please try again shortly, or email support@caiusdata.com.',
+        code: 'not_configured',
+      },
+      { status: 503 },
+    )
   }
 
   if (!filters.hs4 && !filters.keyword) {
@@ -138,9 +159,18 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ url: session.url, sessionId: session.id })
   } catch (error) {
-    console.error('[api/checkout]', error)
+    // A short reference the buyer can quote and we can grep the logs for.
+    // Without it a support email says only "it didn't work".
+    const reference = Math.random().toString(36).slice(2, 8).toUpperCase()
+    console.error(`[api/checkout] ref=${reference}`, error)
+
     return NextResponse.json(
-      { error: `Could not start checkout for the ${formatUsd(pack.amountCents)} pack.` },
+      {
+        error:
+          `Something went wrong starting checkout for the ${formatUsd(pack.amountCents)} pack. ` +
+          `You have not been charged. Quote reference ${reference} if you email support@caiusdata.com.`,
+        reference,
+      },
       { status: 500 },
     )
   }
