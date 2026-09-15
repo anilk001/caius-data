@@ -1,0 +1,6 @@
+# Ingest tooling. Install into a virtualenv:
+#   python3 -m venv .venv && . .venv/bin/activate
+#   pip install -r scripts/requirements.txt
+supabase>=2.10.0
+python-dotenv>=1.0.1
+pyairtable>=3.0.0
