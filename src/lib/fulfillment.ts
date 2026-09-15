@@ -11,6 +11,63 @@ import { EXPORT_BUCKET } from '@/lib/env'
 
 const SEVEN_DAYS_SECONDS = 60 * 60 * 24 * 7
 
+interface DeliveryContext {
+  email: string
+  filters: { keyword: string | null; hs4: string | null; port: string | null; state: string | null }
+  recordCount: number
+  packId: string
+  session: Stripe.Checkout.Session
+}
+
+/**
+ * Sign the stored pack, email it, and mark the order delivered.
+ *
+ * Shared by a first-time fulfilment and by a retry resuming after the email
+ * failed, so a resumed order takes exactly the same path rather than a
+ * near-copy that can drift.
+ */
+async function deliverExistingPack(
+  orderId: string,
+  storagePath: string,
+  ctx: DeliveryContext,
+) {
+  const admin = createAdminClient()
+  const pack = getPack(ctx.packId)
+
+  const filename = storagePath.split('/').pop() ?? 'caius-data.csv'
+  const { data: signed, error: signError } = await admin.storage
+    .from(EXPORT_BUCKET)
+    .createSignedUrl(storagePath, SEVEN_DAYS_SECONDS, { download: filename })
+
+  if (signError || !signed?.signedUrl) {
+    throw new Error(`Signed URL failed: ${signError?.message ?? 'no url returned'}`)
+  }
+
+  const expiresAt = new Date(Date.now() + SEVEN_DAYS_SECONDS * 1000)
+
+  await sendPackDeliveryEmail({
+    to: ctx.email,
+    downloadUrl: signed.signedUrl,
+    expiresAt,
+    hs4: ctx.filters.hs4 || 'all',
+    keyword: ctx.filters.keyword,
+    recordCount: ctx.recordCount,
+    amountCents: ctx.session.amount_total ?? pack?.amountCents ?? 0,
+    packName: pack?.name ?? 'Buyer',
+  })
+
+  await admin
+    .from('orders')
+    .update({
+      status: 'delivered',
+      delivered_at: new Date().toISOString(),
+      download_expires_at: expiresAt.toISOString(),
+    })
+    .eq('id', orderId)
+
+  return { emailed: true as const }
+}
+
 /**
  * Turn a completed Checkout session into a delivered buyer pack.
  *
@@ -50,7 +107,7 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
   // --- 1. Claim the order ---------------------------------------------------
   const { data: existing, error: lookupError } = await admin
     .from('orders')
-    .select('id, status')
+    .select('id, status, csv_storage_path')
     .eq('stripe_session_id', sessionId)
     .maybeSingle()
 
@@ -58,8 +115,23 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
     throw new Error(`Order lookup failed: ${lookupError.message}`)
   }
 
-  if (existing && (existing.status === 'fulfilled' || existing.status === 'delivered')) {
-    return { orderId: existing.id, alreadyFulfilled: true as const }
+  // Only `delivered` is terminal. `fulfilled` means the CSV exists but the
+  // email did not go out, which is exactly the state a Resend failure leaves
+  // behind — and Stripe is retrying precisely because we returned a 500.
+  // Short-circuiting on `fulfilled` would make those retries no-ops and strand
+  // the order forever, so it resumes at the delivery step instead of rebuilding
+  // a file that is already in storage.
+  if (existing?.status === 'delivered') {
+    return { orderId: existing.id, alreadyDelivered: true as const }
+  }
+
+  if (existing?.status === 'fulfilled' && existing.csv_storage_path) {
+    const redelivered = await deliverExistingPack(
+      existing.id,
+      existing.csv_storage_path,
+      { email, filters, recordCount, packId, session },
+    )
+    return { orderId: existing.id, resumedDelivery: true as const, ...redelivered }
   }
 
   let orderId = existing?.id
@@ -127,46 +199,31 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
 
   if (uploadError) throw new Error(`CSV upload failed: ${uploadError.message}`)
 
-  const { data: signed, error: signError } = await admin.storage
-    .from(EXPORT_BUCKET)
-    .createSignedUrl(storagePath, SEVEN_DAYS_SECONDS, { download: filename })
-
-  if (signError || !signed?.signedUrl) {
-    throw new Error(`Signed URL failed: ${signError?.message ?? 'no url returned'}`)
-  }
-
-  const expiresAt = new Date(Date.now() + SEVEN_DAYS_SECONDS * 1000)
-
+  // Mark fulfilled before attempting delivery. The signed URL is minted inside
+  // deliverExistingPack, so a retry that resumes there gets a fresh 7-day link
+  // rather than inheriting one that started expiring on the first attempt.
   await admin
     .from('orders')
     .update({
       status: 'fulfilled',
       record_count: ordered.length,
       csv_storage_path: storagePath,
-      download_expires_at: expiresAt.toISOString(),
       fulfilled_at: new Date().toISOString(),
     })
     .eq('id', orderId)
 
   // --- 4. Deliver -----------------------------------------------------------
-  // The pack is already built and stored at this point. If email fails the
-  // order stays `fulfilled`, and /success still serves the download — so a
-  // Resend outage delays the receipt, it does not lose the purchase.
-  await sendPackDeliveryEmail({
-    to: email,
-    downloadUrl: signed.signedUrl,
-    expiresAt,
-    hs4: filters.hs4 || 'all',
-    keyword: filters.keyword,
+  // The pack is stored and the order marked `fulfilled` before this point, so
+  // a Resend outage delays the receipt without losing the purchase — /success
+  // still serves the download. The 500 this throws makes Stripe retry, and the
+  // retry resumes here rather than rebuilding the file.
+  await deliverExistingPack(orderId, storagePath, {
+    email,
+    filters,
     recordCount: ordered.length,
-    amountCents: session.amount_total ?? pack?.amountCents ?? 0,
-    packName: pack?.name ?? 'Buyer',
+    packId,
+    session,
   })
 
-  await admin
-    .from('orders')
-    .update({ status: 'delivered', delivered_at: new Date().toISOString() })
-    .eq('id', orderId)
-
-  return { orderId, alreadyFulfilled: false as const, recordCount: ordered.length }
+  return { orderId, recordCount: ordered.length, emailed: true as const }
 }
