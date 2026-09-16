@@ -229,3 +229,11 @@ against `package.json` and adds whatever is missing.
 It is deliberately `npm install` and not `npm ci`: `npm ci` deletes
 `node_modules` first, and Railway mounts a build cache inside it at
 `node_modules/.cache`, so the delete fails with `EBUSY`.
+
+The command also empties `.next/cache` before building. Railway mounts that
+directory from a persistent volume, so it survives between deploys — including
+across the deploy where a module was genuinely missing. Turbopack kept resolving
+`@tailwindcss/postcss` against that stale cache and failing, in a build where
+`npm install` had just reported adding the package. Contents are cleared rather
+than the directory removed, because removing a mount point fails with `EBUSY`
+the same way.
