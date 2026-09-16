@@ -205,3 +205,16 @@ stripe listen --forward-to localhost:3000/api/webhooks/stripe
 ## Licence
 
 Proprietary. © Caius Data LLC.
+
+## Deployment note: build-time dependencies
+
+Railway installs with `NODE_ENV=production`, which makes `npm ci` omit
+devDependencies. Anything `next build` loads to produce the artifact therefore
+lives in `dependencies`, not `devDependencies` — Tailwind and its PostCSS
+plugin, TypeScript, and the `@types` packages. Moving one of them back breaks
+the deploy with `Cannot find module '@tailwindcss/postcss'` while the build
+stays green locally, because a local `npm ci` installs everything.
+
+To reproduce a Railway build before pushing:
+
+    npm ci --omit=dev && npm run build && npm ci
