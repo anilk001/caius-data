@@ -37,11 +37,18 @@ FIXED_ANNUAL = {
     "Railway hosting (est)":           120.00,
     "Resend (free tier, 3k/month)":      0.00,
     "Domain":                           15.00,
-    "Wyoming registered agent (est)":  150.00,
+    "Registered agent renewal (est)":  150.00,
     "Wyoming annual report":            60.00,
-    "US tax filing 5472 + 1120 (est)": 500.00,
+    # Flat-fee CPA filing of Form 5472 + pro-forma 1120. Market rate checked:
+    # $175-$399 from firms that do nothing else. The formation providers bundle
+    # the same filing into "total compliance" plans at around $2,000 a year,
+    # which would cost more than everything else in this table combined.
+    "Form 5472 + 1120, flat-fee CPA":  399.00,
 }
-ONE_OFF = {"Boldata setup fee": SETUP_FEE, "LLC formation (est)": 150.00}
+# The company already exists, so formation is not a cost. No BOI filing: FinCEN's
+# 2025 rule narrowed "reporting company" to entities formed abroad, and a Wyoming
+# LLC is domestic however it is owned.
+ONE_OFF = {"Boldata setup fee": SETUP_FEE}
 
 
 def net_of_stripe(price: float) -> float:

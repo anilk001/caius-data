@@ -21,19 +21,51 @@ cents. The only genuine per-sale cost is Stripe.
 
 ## What it costs to run
 
+The company already exists, so formation is not a cost.
+
 | | |
 | --- | --- |
 | Boldata setup fee | $499 once |
-| LLC formation (est) | $150 once |
 | First credit pack (Growth, 200k credits) | $199 once |
 | Supabase Pro | $300/yr |
 | Railway hosting (est) | $120/yr |
 | Domain | $15/yr |
-| Wyoming registered agent (est) | $150/yr |
+| Registered agent renewal (est) | $150/yr |
 | Wyoming annual report | $60/yr |
-| US tax filing, Form 5472 + 1120 (est) | $500/yr |
-| **Year one** | **≈ $2,000** |
-| **Year two onward** | **≈ $1,145 + credits** |
+| Form 5472 + pro-forma 1120, flat-fee CPA | $399/yr |
+| **Year one** | **≈ $1,742** |
+| **Year two onward** | **≈ $1,044 + credits** |
+
+### Accounting and filings
+
+Two jurisdictions, two people, and they are not interchangeable.
+
+**US federal — online, flat fee.** A foreign-owned single-member LLC must file
+Form 5472 with a pro-forma 1120 every year, even with no profit, as long as
+there was a reportable transaction — funding the company counts. The penalty for
+missing it is **$25,000**, which is more than this business makes in year one.
+Firms that do only this filing charge **$175-$399** flat. Budget $399.
+
+Do **not** take a formation provider's bundled "total compliance" plan without
+pricing it: doola's is around **$2,000 a year**, more than every other cost in
+the table combined. It buys bookkeeping software and a dedicated bookkeeper for
+a business whose books are one Stripe payout line and six supplier bills. The
+filing is the part that carries the penalty; the bookkeeping is a spreadsheet.
+
+Before buying any plan, ask the provider one question: **does it include Form
+5472 and the pro-forma 1120 for a foreign-owned single-member LLC?** Some plans
+cover the state annual report and a standard return and exclude 5472, or charge
+for it separately. That is the only line that matters.
+
+**Irish side — the existing freelance accountant.** He cannot file US federal
+returns; that needs a US preparer. But he is the right person for the question
+that actually decides the tax bill: how Irish Revenue treats income from a US
+LLC owned by an Irish resident, and whether it lands as personal income. Ask him
+before the first sale, not at year end.
+
+**BOI: no filing.** FinCEN's 2025 rule narrowed "reporting company" to entities
+formed under foreign law and registered in a US state. A Wyoming LLC is domestic
+however it is owned, so it is exempt.
 
 ## What the market charges
 
@@ -72,10 +104,10 @@ Going lower buys almost nothing and costs a great deal:
 
 | Price | vs cheapest annual | vs Volza | Stripe's cut | Sales to break even, yr 1 |
 | --- | --- | --- | --- | --- |
-| $9 | 13x cheaper | 167x | 7.7% | 240 |
-| $19 | 6x cheaper | 79x | 6.0% | 112 |
-| $29 | 4x cheaper | 52x | 5.4% | **73** |
-| $49 | 2x cheaper | 31x | 5.0% | 43 |
+| $9 | 13x cheaper | 167x | 7.7% | 210 |
+| $19 | 6x cheaper | 79x | 6.0% | 98 |
+| $29 | 4x cheaper | 52x | 5.4% | **64** |
+| $49 | 2x cheaper | 31x | 5.0% | 37 |
 
 At $29 the pack is already four times cheaper than the cheapest annual
 subscription on the market and fifty times cheaper than the cheapest one that
@@ -92,12 +124,12 @@ every US buyer of HS 6204 — costs $165 to acquire and can be sold repeatedly.
 
 ### Break-even, year two onward
 
-At $29 with a $199 credit top-up: **49 sales a year**, about one a week. Five
-hundred sales a year at $29 returns roughly **$12,400 profit**.
+At $29 with a $199 credit top-up: **45 sales a year**, fewer than one a week.
+Five hundred sales a year at $29 returns roughly **$12,500 profit**.
 
 ## The real constraint is not price
 
-Seventy-three sales is not a pricing problem, it is a traffic problem. Paid
+Sixty-four sales is not a pricing problem, it is a traffic problem. Paid
 advertising probably cannot work here: a $29 sale nets $27, and a B2B
 acquisition cost anywhere near that leaves nothing.
 
@@ -109,10 +141,8 @@ is not.
 
 ## Risks worth pricing in
 
-1. **Form 5472.** A foreign-owned single-member US LLC must file Form 5472 with
-   a pro-forma 1120 every year. The penalty for not filing is **$25,000** — more
-   than the business will make in year one. Get a US accountant before the first
-   sale, not before the first tax deadline.
+1. **Form 5472** — see above. It is the single largest downside risk in the
+   whole plan, and it is administrative rather than commercial.
 2. **Indian cards on Stripe.** International card acceptance from India can be
    unreliable. Test a real Indian card before launch; a checkout that declines is
    indistinguishable from a product nobody wants.

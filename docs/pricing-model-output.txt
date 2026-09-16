@@ -26,18 +26,17 @@ segment size         credits   Growth pack    Scale pack
 2. WHAT IT COSTS TO RUN, YEAR ONE
 ========================================================================
   Boldata setup fee                           499.00   once
-  LLC formation (est)                         150.00   once
   Supabase Pro                                300.00   /year
   Railway hosting (est)                       120.00   /year
   Resend (free tier, 3k/month)                  0.00   /year
   Domain                                       15.00   /year
-  Wyoming registered agent (est)              150.00   /year
+  Registered agent renewal (est)              150.00   /year
   Wyoming annual report                        60.00   /year
-  US tax filing 5472 + 1120 (est)             500.00   /year
+  Form 5472 + 1120, flat-fee CPA              399.00   /year
   First credit pack (Growth, 200k)            199.00   once
 ------------------------------------------------------------------------
-  YEAR ONE TOTAL                            1,993.00
-  Year two onwards (no setup/formation)     1,145.00  + credits
+  YEAR ONE TOTAL                            1,742.00
+  Year two onwards (no setup/formation)     1,044.00  + credits
 
 ========================================================================
 3. WHAT WE HAVE TO SELL AT
@@ -48,23 +47,23 @@ low price — it is 1.6% of $19 but 6% of $5.
 
    price   Stripe fee       net    fee %   sales to break even yr1
 ------------------------------------------------------------------------
-       5         0.52      4.48   10.4%                       445
-       9         0.70      8.30    7.7%                       240
-      12         0.83     11.17    6.9%                       178
-      19         1.14     17.86    6.0%                       112
-      29         1.58     27.42    5.4%                        73
-      39         2.02     36.98    5.2%                        54
-      49         2.46     46.54    5.0%                        43
-      79         3.78     75.22    4.8%                        26
+       5         0.52      4.48   10.4%                       389
+       9         0.70      8.30    7.7%                       210
+      12         0.83     11.17    6.9%                       156
+      19         1.14     17.86    6.0%                        98
+      29         1.58     27.42    5.4%                        64
+      39         2.02     36.98    5.2%                        47
+      49         2.46     46.54    5.0%                        37
+      79         3.78     75.22    4.8%                        23
 
 Year two onwards, with a $199 credit top-up:
    price       net     sales to break even   profit at 500 sales
 ------------------------------------------------------------------------
-       9      8.30                     162                 2,808
-      19     17.86                      75                 7,588
-      29     27.42                      49                12,368
-      39     36.98                      36                17,148
-      49     46.54                      29                21,928
+       9      8.30                     150                 2,909
+      19     17.86                      70                 7,689
+      29     27.42                      45                12,469
+      39     36.98                      34                17,249
+      49     46.54                      27                22,029
 
 ========================================================================
 4. WHAT THE MARKET CHARGES
