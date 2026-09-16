@@ -360,6 +360,17 @@ MIN_SHIPMENTS_TO_JUDGE = 500
 MIN_PIECES_PER_SHIPMENT = 2.0
 MIN_VALUE_PER_SHIPMENT = 50.0
 
+# The quantity unit is not trustworthy. One search-filters response listed a
+# hundred of them — PCS, PIECE, Pieces, PCE, DOZ, DOZEN, SET, CARTON, KG, шт —
+# so "one unit per shipment" might be one garment or one carton of them. A
+# buyer shipping a dozen at a time would otherwise read as a parcel courier
+# and vanish from every pack.
+#
+# Value settles it. Every parcel shipper found so far runs well under this per
+# shipment: Stelcore $5, AA Brands $5, Ethnovog $28, Cbazaar $61. A wholesale
+# buyer whose unit we have merely misread does not.
+MAX_VALUE_FOR_PARCEL_SHIPMENT = 500.0
+
 
 def looks_like_consolidator(
     shipments: int | None,
@@ -379,10 +390,19 @@ def looks_like_consolidator(
     if not shipments or shipments < MIN_SHIPMENTS_TO_JUDGE:
         return False
 
+    per_shipment_value = value / shipments if value else None
+
+    # Almost nothing per shipment, whatever the unit means.
+    if per_shipment_value is not None and per_shipment_value < MIN_VALUE_PER_SHIPMENT:
+        return True
+
+    # One unit a shipment AND too little money for that unit to be a carton.
     if quantity and quantity / shipments < MIN_PIECES_PER_SHIPMENT:
-        return True
-    if value and value / shipments < MIN_VALUE_PER_SHIPMENT:
-        return True
+        return (
+            per_shipment_value is not None
+            and per_shipment_value < MAX_VALUE_FOR_PARCEL_SHIPMENT
+        )
+
     return False
 
 

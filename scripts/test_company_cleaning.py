@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from company_cleaning import (
     clean_company_name,
     looks_like_logistics,
+    looks_like_consolidator,
     clean_hs4,
     clean_state,
     grouping_key,
@@ -213,6 +214,40 @@ for raw, expected in [
     got = clean_company_name(raw)
     if got != expected:
         failures.append(f"  {raw!r}\n    expected {expected!r}\n    got      {got!r}")
+
+# --- Parcel shippers, judged on the real India lane --------------------------
+# name, shipments, total value, total quantity, should_drop
+for name, ships, value, qty, drop in [
+    # Every one of these is real, from HS 6204 US<-IN, 12 months to Sep 2026.
+    ("Stelcore Management Services", 51968, 275311.87, 51968, True),
+    ("Cbazaar.com",                   2694, 164028.21, 2694,  True),
+    ("Ethnovog International",        1222, 34330.47, 1222,   True),
+    ("AA Brands",                      998, 4693.65, 1063,    True),
+    ("Urban Outfitters",              3491, 25512417.97, 1563063, False),
+    ("Old Navy",                      2404, 31102194.69, 5014501, False),
+    ("Wal-Mart Stores",               2070, 44581846.49, 4956074, False),
+    ("Last Brand (Quince)",           1368, 511089.14, 32265,  False),
+    ("The Gap",                        988, 4467803.19, 537771, False),
+]:
+    got = looks_like_consolidator(ships, value, qty)
+    if got != drop:
+        failures.append(
+            f"  {name}: expected drop={drop}, got {got} "
+            f"(${value/ships:,.0f}/shipment, {qty/ships:.1f} units/shipment)"
+        )
+
+# The unit is untrustworthy — one response listed a hundred of them. A buyer
+# shipping a DOZEN at a time reads as one unit per shipment, and must survive.
+if looks_like_consolidator(900, 1_800_000.0, 900):
+    failures.append("  a buyer at $2,000 a shipment must not read as a parcel courier")
+
+# But a genuine courier at one unit a shipment still goes.
+if not looks_like_consolidator(900, 27_000.0, 900):
+    failures.append("  $30 and one unit a shipment is a courier, not a buyer")
+
+# Too few shipments to judge on ratios at all.
+if looks_like_consolidator(120, 600.0, 120):
+    failures.append("  a company below the volume threshold must never be judged")
 
 if failures:
     print(f"\n{len(failures)} failure(s):\n")
