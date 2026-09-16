@@ -4,7 +4,13 @@ import { useState } from 'react'
 import { Check, Loader2, ShoppingCart } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { PACKS, proratedAmountCents, type Pack } from '@/lib/packs'
+import {
+  PACKS,
+  minCompaniesFor,
+  proratedAmountCents,
+  MIN_SALE_CENTS,
+  type Pack,
+} from '@/lib/packs'
 import { cn, formatUsd } from '@/lib/utils'
 import type { Filters } from '@/lib/validation'
 
@@ -77,6 +83,10 @@ export function PackPicker({
           const price = capped
             ? proratedAmountCents(pack, matchCount)
             : pack.amountCents
+          // Below the minimum sale the button is disabled rather than left to
+          // fail at checkout. A buyer who clicks and is refused has been shown
+          // a price we were never going to honour.
+          const tooSmall = capped && price < MIN_SALE_CENTS
 
           return (
             <div
@@ -93,9 +103,9 @@ export function PackPicker({
                 </div>
                 <p className="flex items-baseline gap-1.5">
                   <span className="text-3xl font-semibold tracking-tight">
-                    {formatUsd(price)}
+                    {tooSmall ? '—' : formatUsd(price)}
                   </span>
-                  {capped && (
+                  {capped && !tooSmall && (
                     <span className="text-muted-foreground text-xs line-through">
                       {formatUsd(pack.amountCents)}
                     </span>
@@ -125,7 +135,7 @@ export function PackPicker({
                 </li>
               </ul>
 
-              {capped && (
+              {capped && !tooSmall && (
                 <p className="text-muted-foreground text-xs">
                   Your filters match ~{matchCount.toLocaleString('en-US')} companies,
                   so the price is reduced to match. You are never charged for
@@ -133,16 +143,26 @@ export function PackPicker({
                 </p>
               )}
 
+              {tooSmall && (
+                <p className="text-muted-foreground text-xs">
+                  Only ~{matchCount.toLocaleString('en-US')} companies match. Our
+                  smallest sale is {formatUsd(MIN_SALE_CENTS)}, which needs at least{' '}
+                  {minCompaniesFor(pack)} — widen your search and this unlocks.
+                </p>
+              )}
+
               <Button
                 variant={pack.highlight ? 'brand' : 'default'}
                 onClick={() => buy(pack)}
-                disabled={disabled || pending !== null}
+                disabled={disabled || tooSmall || pending !== null}
               >
                 {pending === pack.id ? (
                   <>
                     <Loader2 className="animate-spin" />
                     Opening checkout…
                   </>
+                ) : tooSmall ? (
+                  <>Too few companies</>
                 ) : (
                   <>
                     <ShoppingCart />

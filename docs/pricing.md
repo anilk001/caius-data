@@ -3,6 +3,24 @@
 Worked 16 September 2026. Run `python3 scripts/pricing_model.py` to regenerate
 the arithmetic; `docs/pricing-model-output.txt` is the current output.
 
+## Floor: no sale under $9
+
+A niche holding fewer companies than the pack is charged pro rata — 120 of 200
+costs 120/200 of the price — but **below $9 there is no sale at all**. Stripe's
+own floor is 50 cents; this is a business one. Every sale costs the same to
+support whatever it earned, and a thin file sets an expectation of what a Caius
+pack contains that the next buyer inherits.
+
+| Pack | Size | Price | Fewest companies sellable |
+| --- | --- | --- | --- |
+| Starter | 200 | $19 | 95 |
+| Growth | 350 | $29 | 109 |
+| Pro | 500 | $49 | 92 |
+
+The thresholds derive from the floor and the pack price, so changing either
+moves them. Below it the pack card shows no price and the button reads "Too few
+companies", rather than letting someone click through to a refusal.
+
 ## What a row is
 
 **One row is one company.** Not one shipment, not one company-location. A buyer

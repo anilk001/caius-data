@@ -3,7 +3,13 @@ import assert from 'node:assert/strict'
 
 import { buyerKey, mergeByBuyer, overFetch, type Buyer } from '../src/lib/buyers.ts'
 import { MAX_SEARCH_LIMIT } from '../src/lib/search-limits.ts'
-import { PACKS, proratedAmountCents, isTooSmallToSell } from '../src/lib/packs.ts'
+import {
+  PACKS,
+  proratedAmountCents,
+  isTooSmallToSell,
+  minCompaniesFor,
+  MIN_SALE_CENTS,
+} from '../src/lib/packs.ts'
 import type { CompanyRow } from '../src/types/database.ts'
 
 /**
@@ -197,17 +203,46 @@ describe('pro-rata pricing for a short niche', () => {
     assert.equal(proratedAmountCents(pack, -5), 0)
   })
 
-  it('refuses a sale below what Stripe will process', () => {
-    // 5 companies of a $19/200 pack is 47 cents; Stripe's floor is 50.
-    assert.equal(isTooSmallToSell(pack, 5), true)
-    assert.equal(isTooSmallToSell(pack, 6), false)
+  it('refuses any sale under the $9 minimum', () => {
+    // $19 over 200 companies is 9.5c each, so $9 needs 95 of them.
+    assert.equal(minCompaniesFor(pack), 95)
+    assert.equal(isTooSmallToSell(pack, 94), true)
+    assert.equal(isTooSmallToSell(pack, 95), false)
     assert.equal(isTooSmallToSell(pack, 200), false)
+    assert.ok(proratedAmountCents(pack, 94) < MIN_SALE_CENTS)
+    assert.ok(proratedAmountCents(pack, 95) >= MIN_SALE_CENTS)
   })
 
-  it('prices every real pack sanely at one company', () => {
+  it('never lets a floored price slip under the minimum', () => {
+    // minCompaniesFor ceilings precisely because proratedAmountCents floors.
+    for (const real of PACKS) {
+      const floor = minCompaniesFor(real)
+      assert.ok(
+        proratedAmountCents(real, floor) >= MIN_SALE_CENTS,
+        `${real.id}: ${floor} companies prices under the minimum`,
+      )
+      assert.equal(isTooSmallToSell(real, floor), false)
+      assert.equal(isTooSmallToSell(real, floor - 1), true)
+    }
+  })
+
+  it('keeps the minimum reachable inside every pack', () => {
+    // A pack whose full price is under the floor would be unsellable at any
+    // size. That is a pricing mistake, not a runtime condition.
+    for (const real of PACKS) {
+      assert.ok(
+        real.amountCents >= MIN_SALE_CENTS,
+        `${real.id} is priced below the minimum sale`,
+      )
+      assert.ok(minCompaniesFor(real) <= real.recordCount)
+    }
+  })
+
+  it('prices every real pack sanely at one company, then refuses it', () => {
     for (const real of PACKS) {
       const one = proratedAmountCents(real, 1)
       assert.ok(one >= 0 && one < real.amountCents, `${real.id} priced oddly at 1`)
+      assert.equal(isTooSmallToSell(real, 1), true)
     }
   })
 })

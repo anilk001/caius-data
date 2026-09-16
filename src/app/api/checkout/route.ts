@@ -5,7 +5,9 @@ import { getStripe } from '@/lib/stripe'
 import {
   getPack,
   isTooSmallToSell,
+  minCompaniesFor,
   proratedAmountCents,
+  MIN_SALE_CENTS,
 } from '@/lib/packs'
 import { searchCompanies } from '@/lib/search'
 import { mergeByBuyer, overFetch } from '@/lib/buyers'
@@ -118,7 +120,8 @@ export async function POST(request: NextRequest) {
         {
           error:
             `Only ${deliverable} ${deliverable === 1 ? 'company matches' : 'companies match'} ` +
-            `those filters — too few to be worth selling. Try a broader HS code or drop a filter.`,
+            `those filters. Our smallest sale is ${formatUsd(MIN_SALE_CENTS)}, which needs at ` +
+            `least ${minCompaniesFor(pack)} companies — try a broader HS code or drop a filter.`,
         },
         { status: 409 },
       )

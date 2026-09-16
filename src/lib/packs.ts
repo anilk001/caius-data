@@ -50,10 +50,15 @@ export function getPack(id: string | null | undefined): Pack | undefined {
 export const FREE_SAMPLE_ROWS = 3
 
 /**
- * Stripe will not process a USD charge below 50 cents, and a pack that small is
- * not worth selling anyway — the free sample is already three rows.
+ * The smallest sale worth making, in cents.
+ *
+ * Stripe's own floor is 50 cents, but a $2 pack is not a business. Every sale
+ * costs the same to support whatever it earned — the same refund risk, the same
+ * inbox, the same chargeback exposure — and a tiny file sets an expectation of
+ * what a Caius pack contains that the next buyer inherits. Below this we do not
+ * sell at all rather than sell something thin.
  */
-export const STRIPE_MIN_CHARGE_CENTS = 50
+export const MIN_SALE_CENTS = 900
 
 /**
  * What to charge when a niche holds fewer companies than the pack advertises.
@@ -71,7 +76,21 @@ export function proratedAmountCents(pack: Pack, deliverable: number): number {
   return Math.floor((pack.amountCents * deliverable) / pack.recordCount)
 }
 
-/** True when a short pack would fall below what Stripe will process. */
+/** True when a short pack is not worth selling. */
 export function isTooSmallToSell(pack: Pack, deliverable: number): boolean {
-  return proratedAmountCents(pack, deliverable) < STRIPE_MIN_CHARGE_CENTS
+  return proratedAmountCents(pack, deliverable) < MIN_SALE_CENTS
+}
+
+/**
+ * Fewest companies this pack can be sold with.
+ *
+ * Derived from MIN_SALE_CENTS rather than fixed, so changing the floor or a
+ * pack's price moves this with it. Ceiling, because the pro-rata price floors:
+ * one company short of this rounds down under the minimum.
+ */
+export function minCompaniesFor(pack: Pack): number {
+  return Math.min(
+    pack.recordCount,
+    Math.ceil((MIN_SALE_CENTS * pack.recordCount) / pack.amountCents),
+  )
 }
