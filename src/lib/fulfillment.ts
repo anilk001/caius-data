@@ -7,7 +7,7 @@ import { csvFilename, toCsv, withBom } from '@/lib/csv'
 import { PACK_COLUMNS } from '@/lib/export-columns'
 import { mergeByBuyer, overFetch } from '@/lib/buyers'
 import { MIN_RECORDS } from '@/lib/pricing'
-import { MAX_SEARCH_LIMIT } from '@/lib/search-limits'
+import { MAX_PACK_RECORDS } from '@/lib/search-limits'
 import { sendPackDeliveryEmail } from '@/lib/email'
 import { EXPORT_BUCKET } from '@/lib/env'
 
@@ -181,7 +181,7 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
   // deliver fewer than N every time a buyer has two addresses.
   const { rows: matched } = await searchCompaniesFull(admin, {
     ...filters,
-    limit: overFetch(recordCount, MAX_SEARCH_LIMIT),
+    limit: overFetch(recordCount, MAX_PACK_RECORDS),
   })
 
   const ordered = mergeByBuyer(matched).slice(0, recordCount)

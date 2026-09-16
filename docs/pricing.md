@@ -37,16 +37,25 @@ Two properties are tested at every size from 50 to 5,000 rather than at sample
 points, because one inverted band edge breaks them silently: taking more can
 never cost more each, and never less in total.
 
-### Blocking the whole-lane sale
+### No ceiling
 
-`MAX_SEARCH_LIMIT` is 500, so 500 is the largest list one query can build, and
-the picker clamps to it: quoting $451 for 2,000 companies and delivering 500
-would be priced correctly on what was found but not on what the buyer was shown.
+A buyer can take a whole lane. `searchCompaniesFull` pages rather than issuing
+one capped query, so 15,916 companies is sixteen requests rather than a $867
+charge for the first 500 rows.
 
-Everything above 500 is therefore unsellable today, and that is where the money
-is — a whole lane at $451 against $165 of data bought once and resold for ever.
-Lifting it means paginating `searchCompaniesFull` rather than issuing one capped
-query. Until then the picker says so and points at email.
+`MAX_PACK_RECORDS` is 50,000 and is a memory guard, not a price cap — the
+largest lane observed is 15,916, so nothing real approaches it. If something
+does, it deserves a look rather than being silently served.
+
+The paging arithmetic lives in `src/lib/paging.ts`, separate from Supabase, and
+is tested directly: contiguous non-overlapping pages, a stop on the first short
+page, a trimmed final page, and — the one that costs money — counting **buyers**
+rather than rows, so three warehouse filings of one company are one company. A
+quote for 50 companies out of a 15,916-row lane still costs one request.
+
+Ordering gained `id` as a final tiebreaker. Two rows with the same shipment
+count and name previously sorted arbitrarily, which is harmless in one query and
+not in sixteen: a row could land on two pages or on none.
 
 ## What a row is
 

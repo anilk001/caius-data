@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react'
 import { Check, Loader2, ShoppingCart } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MIN_RECORDS, perCompanyCents, priceCents } from '@/lib/pricing'
-import { MAX_SEARCH_LIMIT } from '@/lib/search-limits'
 import { formatUsd } from '@/lib/utils'
 import type { Filters } from '@/lib/validation'
 
@@ -23,7 +22,7 @@ import type { Filters } from '@/lib/validation'
  */
 
 /** Shortcuts, so most buyers never touch the input. */
-const PRESETS = [50, 200, 500, 1000] as const
+const PRESETS = [50, 200, 500, 1000, 2500] as const
 
 export function PackPicker({
   filters,
@@ -37,12 +36,7 @@ export function PackPicker({
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Never offer more than one query can return. Without this clamp a lane with
-  // 7,592 buyers would quote $451 for 2,000 companies and deliver 500 — priced
-  // correctly on what was found, but not what the buyer was shown.
-  const held = matchCount ?? 0
-  const available = Math.min(held, MAX_SEARCH_LIMIT)
-  const capped = held > MAX_SEARCH_LIMIT
+  const available = matchCount ?? 0
   const [records, setRecords] = useState<number>(200)
 
   // Never offer more than we hold, and never fewer than we sell.
@@ -115,7 +109,7 @@ export function PackPicker({
                     className="border-input bg-background focus-visible:ring-ring w-28 rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
                   />
                   <span className="text-muted-foreground text-sm">
-                    of {available.toLocaleString('en-US')} available
+                    of ~{available.toLocaleString('en-US')} available
                   </span>
                 </div>
               </div>
@@ -156,13 +150,6 @@ export function PackPicker({
               )}
             </div>
 
-            {capped && (
-              <p className="text-muted-foreground text-xs">
-                {held.toLocaleString('en-US')} companies match, and we deliver the
-                top {MAX_SEARCH_LIMIT} by shipment volume in one file. Need the
-                whole lane? Email support@caiusdata.com.
-              </p>
-            )}
 
             <ul className="text-muted-foreground grid gap-2 text-sm sm:grid-cols-3">
               <li className="flex gap-2">

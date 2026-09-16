@@ -3,9 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getStripe } from '@/lib/stripe'
 import { priceCents, MIN_RECORDS } from '@/lib/pricing'
-import { searchCompanies } from '@/lib/search'
-import { mergeByBuyer, overFetch } from '@/lib/buyers'
-import { MAX_SEARCH_LIMIT } from '@/lib/search-limits'
+import { countBuyers } from '@/lib/search'
+import { mergeByBuyer } from '@/lib/buyers'
 import type { CompanyRow } from '@/types/database'
 import { checkoutSchema } from '@/lib/validation'
 import { siteUrl } from '@/lib/env'
@@ -83,24 +82,25 @@ export async function POST(request: NextRequest) {
     // refund and a chargeback, so the shortfall is priced before payment, not
     // discovered after it.
     const anon = await createClient()
-    const { rows: available } = await searchCompanies(anon, {
-      ...filters,
-      limit: overFetch(requested, MAX_SEARCH_LIMIT),
-    })
 
-    // mergeByBuyer wants full rows; the public projection carries every field it
-    // reads, so the cast is safe and avoids handing the anon client '*'.
-    const buyers = mergeByBuyer(available as unknown as CompanyRow[])
+    // Count distinct buyers, paging only as far as the request needs. Pricing
+    // 50 companies out of a 15,916-row lane costs one page, not sixteen.
+    const buyerCount = await countBuyers(
+      anon,
+      filters,
+      requested,
+      (rows) => mergeByBuyer(rows as unknown as CompanyRow[]),
+    )
 
     // Never more than the buyer asked for, never more than we hold.
-    const deliverable = Math.min(buyers.length, requested)
+    const deliverable = Math.min(buyerCount, requested)
     const amountCents = priceCents(deliverable)
 
     if (amountCents === null) {
       return NextResponse.json(
         {
           error:
-            `Only ${buyers.length} ${buyers.length === 1 ? 'company matches' : 'companies match'} ` +
+            `Only ${buyerCount} ${buyerCount === 1 ? 'company matches' : 'companies match'} ` +
             `those filters. The smallest list we sell is ${MIN_RECORDS} — try a broader ` +
             `HS code or drop a filter.`,
         },

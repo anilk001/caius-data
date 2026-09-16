@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 
 import { csvFilename, toCsv, withBom, type CsvColumn } from '../src/lib/csv.ts'
 import { normalizeHs4, isHs4 } from '../src/lib/hs4.ts'
-import { MAX_SEARCH_LIMIT } from '../src/lib/search-limits.ts'
+import { MAX_SEARCH_LIMIT, MAX_PACK_RECORDS } from '../src/lib/search-limits.ts'
 import { priceCents, MIN_RECORDS } from '../src/lib/pricing.ts'
 import { formatUsd } from '../src/lib/utils.ts'
 
@@ -114,17 +114,23 @@ describe('normalizeHs4', () => {
 })
 
 describe('pricing / query limits', () => {
-  // Buyers choose their own count now, so nothing stops one asking for 2,000
-  // companies on a lane that holds 7,592. One query returns at most
-  // MAX_SEARCH_LIMIT rows, so a quote above that would promise a file we cannot
-  // build — priced on what was found, but not on what the buyer was shown.
-  it('prices the query ceiling, so the biggest quotable list is deliverable', () => {
-    assert.ok(priceCents(MAX_SEARCH_LIMIT) !== null)
+  // There is no price ceiling: a buyer may take a whole lane, and the largest
+  // seen is 15,916 companies. So the paid path pages instead of issuing one
+  // capped query, and nothing in pricing may reintroduce a cap by the back door.
+  it('prices lists far beyond one request', () => {
+    assert.ok(priceCents(MAX_SEARCH_LIMIT * 40) !== null)
+    assert.ok(priceCents(15_916)! > priceCents(MAX_SEARCH_LIMIT)!)
   })
 
-  it('sells nothing smaller than the minimum, and the minimum fits', () => {
+  it('prices right up to the safety ceiling', () => {
+    // MAX_PACK_RECORDS guards memory, not revenue. Everything under it sells.
+    assert.ok(priceCents(MAX_PACK_RECORDS) !== null)
+    assert.ok(MAX_PACK_RECORDS > 15_916, 'the largest lane seen must fit')
+  })
+
+  it('sells nothing smaller than the minimum', () => {
     assert.equal(priceCents(MIN_RECORDS - 1), null)
-    assert.ok(MIN_RECORDS <= MAX_SEARCH_LIMIT)
+    assert.ok(MIN_RECORDS < MAX_SEARCH_LIMIT)
   })
 })
 
