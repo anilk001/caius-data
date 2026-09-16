@@ -180,6 +180,37 @@ check("a low-volume company is never judged on ratios",
       map_all([dict(LIVE[0], id="5", total_shipments=40, total_import_quantity=40,
                     total_import_value=212.0)], "6204")[0] != [], True)
 
+# --- Personal data never enters the database ---------------------------------
+# The vendor confirmed the API "may return personal email addresses or mobile
+# numbers". Caius is EU-operated and sells outside the EU, so a personal email
+# in a pack is an international transfer of personal data, with an erasure duty
+# reaching every customer who downloaded that row. Cheaper never to hold it.
+WITH_CONTACTS = {
+    "id": "p1", "name": "ORIENT CRAFT LIMITED", "total_shipments": 900,
+    "total_import_value": 4500000.0, "total_import_quantity": 180000,
+    "country": {"code": "US"}, "export_countries": [{"name": "INDIA", "code": "IN"}],
+    "unloading_ports": ["NEW YORK"],
+    "products": "LADIES WOVEN DRESS - CONTACT ramesh@orientcraft.in OR +91 98765 43210",
+    "contact_info": {"email": "ramesh@orientcraft.in", "phone": "+91 98765 43210"},
+    "social_links": {"linkedin": "https://linkedin.com/in/ramesh"},
+}
+
+contact_rows, contact_skipped = map_all([WITH_CONTACTS], "6204")
+row = contact_rows[0]
+
+check("the buyer is still sold", row["name"], "Orient Craft Limited")
+check("no contact field is copied onto the row",
+      [k for k in row if "email" in k or "phone" in k or "social" in k or "contact" in k], [])
+check("an address inside the goods description is redacted",
+      row["product_description"],
+      "LADIES WOVEN DRESS - CONTACT [removed] OR [removed]")
+check("and the run says it saw them",
+      contact_skipped["records carrying personal contact fields (dropped, not stored)"], 1)
+
+# No false alarm on the ordinary case.
+check("a record with no contact fields raises nothing",
+      "records carrying personal contact fields (dropped, not stored)" in skipped, False)
+
 if failures:
     print(f"\n{len(failures)} failure(s):\n")
     print("\n\n".join(failures))

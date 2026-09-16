@@ -17,8 +17,9 @@ export default function SearchPage() {
           Search US importers
         </h1>
         <p className="text-muted-foreground leading-relaxed">
-          Every row is a real US company that has taken delivery of goods under
-          this HS code. Search is free — you only pay when you want the full file.
+          Every row is a company recorded on a customs filing as the buyer of goods
+          imported into the US under this HS code. Search is free — you only pay
+          when you want the full file.
         </p>
       </header>
 

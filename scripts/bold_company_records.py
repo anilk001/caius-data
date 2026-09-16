@@ -38,6 +38,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from personal_data import detect_personal_fields, redact_contacts
 from company_cleaning import (
     clean_company_name,
     clean_hs4,
@@ -126,7 +127,10 @@ def map_company_record(record: dict, hs4: str) -> dict | None:
         "city": None,
         "state": None,
         "address": None,
-        "product_description": _text(record.get("products")),
+        # Filer-typed text sometimes carries "contact ramesh@exporter.co.in".
+        # A column allowlist does not help when the address sits inside a column
+        # we do want.
+        "product_description": redact_contacts(_text(record.get("products"))),
         # companies.primary_port is documented as the modal port of unlading,
         # which an aggregate cannot give us: the list arrives unranked. First
         # listed is a proxy, and is marked as such rather than passed off as
@@ -214,6 +218,12 @@ def map_all(
                 skipped["parcel consolidator (1 pc or under $50 a shipment)"] += 1
             continue
         rows.append(row)
+
+    # Audit line, not a filter: the mapper never copies these fields, so this
+    # records that the response carried them and that nothing was stored.
+    personal = sum(1 for r in records if isinstance(r, dict) and detect_personal_fields(r))
+    if personal:
+        skipped[f"records carrying personal contact fields (dropped, not stored)"] = personal
 
     rows, duplicates = merge_rows(rows)
     if duplicates:

@@ -15,10 +15,10 @@ to originate somewhere with real egress.
     # Free: which endpoint names actually exist? (404 vs 400 tells you)
     python scripts/bold_api.py probe
 
-    # Any endpoint, body from the command line, response saved to disk
-    python scripts/bold_api.py call shipment-records \\
-        --body '{"type":"imp","hs_codes":["6204"],"limit":500}' \\
-        --out data/6204.json
+    # Paid: US shipments of HS 6204 from India, capped and confirmed first
+    python scripts/bold_api.py records --hs 6204 \\
+        --import-country US --export-country IN \\
+        --max-records 500 --out data/6204-in.json
 
     # Summarise what came back, before spending more credits
     python scripts/bold_api.py inspect data/6204.json
@@ -247,25 +247,32 @@ def report_countries(data, origin: str | None) -> None:
 # does not. Neither returns records, and credits are only charged on records
 # returned — so the whole surface can be mapped without spending anything.
 
-CANDIDATE_ENDPOINTS = [
-    # Free discovery modules, named on page 2 of the brochure.
+# Confirmed from their documentation portal's own tab bar. Three of these —
+# company-contacts, contact-look-up and kyb — are not in the sales brochure and
+# are almost certainly where the personal emails and mobile numbers they
+# mentioned live. We never call them: not calling an endpoint is a cleaner
+# boundary than filtering its response, and it leaves nothing to explain.
+FREE_ENDPOINTS = [
     "search-filters",
     "shipping-filters",
     "insights",
-    "products",
     "company-search",
-    "check-logistics-company",
-    # Paid extraction modules. Probing costs nothing; calling them does.
-    "shipping-records",
-    "shipment-records",
-    "global-shipping-records",
-    "country-shipping-records",
-    "us-shipping-records",
-    "all-importers",
+    "check-logistic-company",
+    "products",
+]
+
+PAID_ENDPOINTS = [
+    "shipping-records",   # 1 credit per record
+    "all-importers",      # 15 credits per company record
     "all-exporters",
     "competitors",
-    "company-details",
+    "company-details",    # 20 credits per profile
 ]
+
+# Deliberately excluded. Listed so the omission reads as a decision.
+PERSONAL_DATA_ENDPOINTS = ["company-contacts", "contact-look-up", "kyb"]
+
+CANDIDATE_ENDPOINTS = FREE_ENDPOINTS + PAID_ENDPOINTS
 
 
 def probe_endpoint(endpoint: str) -> tuple[int, str]:
@@ -326,6 +333,82 @@ def cmd_probe(args: argparse.Namespace) -> None:
         time.sleep(args.delay)
 
     print(f"\n{len(found)} endpoint(s) exist: {', '.join(found) or 'none'}")
+
+
+# --- Buying shipment records -------------------------------------------------
+
+MAX_PAGE_SIZE = 250        # their limit
+CREDITS_PER_RECORD = 1     # global API; the country-specific USA API is 2
+
+
+def cmd_records(args: argparse.Namespace) -> None:
+    """
+    Page through shipping-records, stopping at a record count you chose.
+
+    Every record returned costs a credit, so the cost is stated and confirmed
+    before the first call rather than discovered afterwards. There is no
+    "fetch everything" mode on purpose: their own dashboard reports 15,916
+    importers for one HS code, and the shipments behind those would empty any
+    credit pack bought so far.
+
+    Their date_range defaults to the last 12 months when omitted, and caps at
+    12 months when given, so a longer history has to be assembled from several
+    runs rather than asked for in one.
+    """
+    body: dict = {
+        "type": args.type,
+        "page_size": min(args.page_size, MAX_PAGE_SIZE),
+        "page_no": 1,
+    }
+    if args.hs:
+        body["hs_codes"] = args.hs
+    if args.company:
+        body["company_ids"] = args.company
+    if args.product:
+        body["products"] = args.product
+    if not any(k in body for k in ("hs_codes", "company_ids", "products")):
+        sys.exit("Pass at least one of --hs, --company or --product.")
+
+    if args.import_country:
+        body["import_countries"] = [c.upper() for c in args.import_country]
+    if args.export_country:
+        body["export_countries"] = [c.upper() for c in args.export_country]
+    if args.start or args.end:
+        body["date_range"] = {}
+        if args.start:
+            body["date_range"]["start_date"] = args.start
+        if args.end:
+            body["date_range"]["end_date"] = args.end
+
+    cost = args.max_records * CREDITS_PER_RECORD
+    print(f"shipping-records  {json.dumps(body)}")
+    print(f"Up to {args.max_records} records = about {cost} credits.")
+    if not args.yes:
+        reply = input("Type 'yes' to spend them: ").strip().lower()
+        if reply != "yes":
+            sys.exit("Stopped. Nothing spent.")
+
+    collected: list[dict] = []
+    page = 1
+    while len(collected) < args.max_records:
+        body["page_no"] = page
+        body["page_size"] = min(args.page_size, args.max_records - len(collected), MAX_PAGE_SIZE)
+        data = post("shipping-records", body)
+        batch = _records(data)
+        collected.extend(batch)
+        print(f"  page {page}: {len(batch)} record(s), {len(collected)} total")
+        # A short page is the last page. Without this the loop pays for empty
+        # pages until it reaches the cap.
+        if len(batch) < body["page_size"]:
+            break
+        page += 1
+        time.sleep(args.delay)
+
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(collected, indent=2))
+    print(f"\nSaved {len(collected)} record(s) to {out} (~{len(collected)} credits).")
+    _summarise(collected)
 
 
 def cmd_filters(args: argparse.Namespace) -> None:
@@ -478,6 +561,22 @@ def main() -> int:
     p.add_argument("endpoint", nargs="*", help="Names to try (default: the brochure's modules)")
     p.add_argument("--delay", type=float, default=1.5, help="Seconds between probes")
     p.set_defaults(func=cmd_probe)
+
+    r = sub.add_parser("records", help="Buy shipment records (1 credit each)")
+    r.add_argument("--type", choices=["imp", "exp"], default="imp")
+    r.add_argument("--hs", action="append", help="HS code (repeatable)")
+    r.add_argument("--company", action="append", help="Company id (repeatable)")
+    r.add_argument("--product", action="append", help="Product name (repeatable)")
+    r.add_argument("--import-country", action="append", help="2-letter code, e.g. US")
+    r.add_argument("--export-country", action="append", help="2-letter code, e.g. IN")
+    r.add_argument("--start", help="YYYY-MM-DD (range caps at 12 months)")
+    r.add_argument("--end", help="YYYY-MM-DD")
+    r.add_argument("--max-records", type=int, required=True, help="Hard cap; 1 credit each")
+    r.add_argument("--page-size", type=int, default=MAX_PAGE_SIZE)
+    r.add_argument("--delay", type=float, default=1.0, help="Seconds between pages")
+    r.add_argument("--yes", action="store_true", help="Skip the spend confirmation")
+    r.add_argument("--out", required=True, help="Where to save the records")
+    r.set_defaults(func=cmd_records)
 
     i = sub.add_parser("inspect", help="Summarise a saved response (no credits)")
     i.add_argument("path")

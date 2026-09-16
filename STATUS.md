@@ -61,72 +61,93 @@ The same regulation explains two other things:
 
 ---
 
-## Open questions for the data vendor
+## The data vendor — answered
 
-Being evaluated: billofladingdata.com. Nothing purchased.
+Vendor: billofladingdata.com, operated by **Boldata LLC** (named in their
+documentation footer; that is the counterparty on any agreement). Nothing
+purchased yet.
 
-1. **Does the licence permit redistribution?** Unanswered, and it decides
-   everything. Their published terms cover rate limits and key security and say
-   nothing about what you may do with records once you have them. Silence is not
-   permission.
-2. **How is their `hs_codes` filter derived,** given the source has no HS codes
-   and their own sample's column was empty? If they infer it from descriptions,
-   their per-HS-code pricing is selling inference we now do ourselves.
-3. **Does the US country-specific API carry structured city/state fields?**
-4. Do credits expire? What are the rate limits?
-5. **What is the shipment-records endpoint called, and what does it take?**
-   `search-filters` is documented and working; the endpoint that actually
-   returns records is not, so `scripts/bold_api.py call` is still aimed at a
-   guessed name.
+They confirmed in writing, 16 September 2026:
 
-### Answered by the live key
+* **Resale is permitted**, in raw or derived form, with no extra fee beyond API
+  pricing and setup. No cap on customers, records per customer, or total records.
+* **Permanent storage and reuse** across packs and customers, with no time limit.
+* **Survival**: records bought while the licence is active stay usable, customers
+  keep delivered CSVs, and nothing must be deleted if we stop buying credits.
+* **No territorial restriction**, and attribution is optional ("Trade data
+  provided by BillOfLadingData.com").
+* **They warrant upstream rights** and will indemnify for claims from their data
+  sources — "subject to the agreed contractual terms", so the actual clause still
+  has to be read.
+* **Onward-transfer restrictions we must impose on our customers**, now in
+  `/terms` clause 3: no resale in any form, no substantially similar bulk dataset
+  (especially cheaper), no public or downloadable publication, no transfer or
+  sub-licence outside their own company.
 
-**Origin-country filtering exists.** A `search-filters` response carries both
-`export_countries` and `import_countries` (~100 entries each, India among them).
-That changes what a pack is: not "the top 200 importers of HS 6204", but "200 US
-dress buyers currently sourcing from Vietnam" — the same records, sold to an
-Indian exporter as switch targets. Worth noting that in a 6204 shipment sample,
-every consignee sourced from Vietnam, Sri Lanka, China or Turkey, and not one
-from India. The buyers are there; they are just buying from someone else.
+### Still to settle
 
-**Their HS codes are raw filer strings, not a taxonomy.** A query for 620442
-returns 73 codes running from 2 digits (`62`, the whole apparel chapter) to 20
-(`62044290620449996211`, two codes typed into one field), and 18 of them belong
-to other headings entirely. Sending that list back buys handbags and T-shirts
-along with the dresses, and credits are charged per record returned. So the
-workflow is: `search-filters` -> prefix-filter on the HS4 heading -> pass the
-survivors to the records endpoint. `scripts/bold_api.py filters --hs 620442
---codes-out codes.json` does the filtering and prints what it dropped;
-`refine` re-runs it against a saved response for free.
+1. **The written licence agreement.** Promised, not yet received. The setup fee
+   is non-refundable in the general case, and they offered to agree terms before
+   purchase — so read and sign the agreement *first*, then pay. Do not reverse
+   that order.
+2. **The indemnity clause itself.** "Subject to the agreed contractual terms"
+   can mean anything until the terms exist.
 
-### The endpoints, and where they are documented
+### Personal data — decided
 
-The API docs are a portal, not a file:
+They confirmed the API may return personal email addresses and mobile numbers,
+and that these can be excluded at extraction. We exclude them.
 
-* All modules: `tradedata.billofladingdata.com/supplier/api-documentation?tab=documentation`
-* USA: same URL with `?tab=country-specific-api-documentation&country=us`
+Their documentation tab bar shows three modules absent from the sales brochure:
+**Company Contacts**, **Contact Look Up** and **KYB**. That is where personal
+contact data lives, which gives a cleaner boundary than field filtering: we do
+not call those endpoints at all. `PERSONAL_DATA_ENDPOINTS` in `bold_api.py`
+names them so the omission reads as a decision rather than an oversight.
 
-Their brochure (page 2) names ten modules and splits them free from paid:
+`scripts/personal_data.py` is the defence in depth — it reports any populated
+contact field a response carries and redacts addresses and phone numbers from
+free-text goods descriptions, where a column allowlist cannot help. Caius is
+EU-operated and sells outside the EU, so a personal email in a pack would be an
+international transfer of personal data with an erasure duty reaching every
+customer who ever downloaded that row. Holding none of it removes the question.
 
-| Free | Paid |
-| --- | --- |
-| Search Filters | Global Shipping Records — 1 credit/record |
-| Shipping Filters | Country-Specific USA/India — **2** credits/record |
-| Insights | All Importers / Exporters / Competitors — 15 credits/record |
-| Products | Company Details profile — 20 credits/profile |
-| Company Search | |
-| Check Logistics Company | |
+---
 
-Slugs are not published, so `scripts/bold_api.py probe` maps them: an empty body
-draws a 400 from a route that exists and a 404 from one that does not, returns no
-records either way, and credits are only charged on records returned.
+### The endpoints — confirmed
 
-The USA field list (brochure page 7) includes `hs_code`, `hs_code_desc`,
-`consignee_address`, `carrier_name`, `vessel_name` and `container_number` — well
-beyond the 22 elements of 19 CFR 103.31, so they are enriching from somewhere.
-The address still arrives as one blob, so `address_parser.py` stays. The HS
-column in their own sample XLSX was empty, so `hs4_classifier.py` stays too, as
-the fallback for rows where "where available" turns out to mean absent.
+Docs portal: `tradedata.billofladingdata.com/supplier/api-documentation?tab=documentation`
+(add `&tab=country-specific-api-documentation&country=us` for the USA API).
+
+Modules, from their own tab bar:
+
+| Free | Paid | Never called |
+| --- | --- | --- |
+| Search Filters | Shipping Records — 1 credit/record | Company Contacts |
+| Shipping Filters | All Importers / All Exporters — 15 credits | Contact Look Up |
+| Insights | Competitors — 15 credits | KYB |
+| Company Search | Company Details — 20 credits/profile | |
+| Check Logistic Company | Country-specific USA/India — 2 credits/record | |
+| Products | | |
+
+**`POST /partner-api/shipping-records`** — required: `page_size` (max 250),
+`page_no`, `type` (imp/exp). At least one of `company_ids`, `hs_codes`,
+`products`, `bill_of_lading_nbrs`. Optional: `date_range` (12-month cap, and
+**defaults to the last 12 months when omitted**, so deeper history takes several
+runs), `import_countries` / `export_countries` (2-letter codes), `weight`,
+`quantity`, `import_value` (each `{min, max}`), `loading_ports`,
+`unloading_ports`, `importer_names`, `exporter_names`, `transport_types` (sea,
+land, air, postal, railway, pipeline, power transmission, other).
+
+**All Importers takes HS code together with buyer and seller country in one
+request.** HS code is required; the countries are optional. So a pack is always
+built around a heading, which is how they are sold anyway.
+
+`bold_api.py records` pages this endpoint behind a mandatory `--max-records` cap
+and prints the credit cost for confirmation before the first call. There is no
+fetch-everything mode: one HS code returns 15,916 importers, and the shipments
+behind those would empty any credit pack on this price list.
+
+Free trial: 1,000 API credits plus 600 download credits.
 
 ### Cost of a pack — correcting an earlier note
 

@@ -26,10 +26,18 @@ export default function TermsPage() {
 
       <h2>2. Where the data comes from</h2>
       <p>
-        Our records are derived from vessel manifest data that US Customs and Border
-        Protection makes available as a public record, together with commercially
-        licensed trade datasets built on the same source. We publish company-level
-        information only.
+        Our records are derived from customs and vessel manifest records released as
+        public records by national customs authorities, together with commercially
+        licensed trade datasets. Depending on the trade lane, a record may originate
+        from United States import filings or from the export filings of the country
+        the goods were shipped from. Each pack states the lane it was built from.
+      </p>
+      <p>
+        A company named in a pack is the buyer recorded on the customs filing. That
+        is not always a company registered in the United States: on some lanes the
+        buyer of record is an overseas purchasing entity importing into the United
+        States. We publish company-level information only, and we do not include
+        personal contact details of individuals.
       </p>
       <p>
         We do not warrant that any record is current, complete or accurate. Manifest
@@ -46,13 +54,29 @@ export default function TermsPage() {
       </ul>
       <p>You may not:</p>
       <ul>
-        <li>resell, republish or redistribute the records as a dataset or product;</li>
+        <li>resell the records, whether as supplied or after your own processing;</li>
+        <li>
+          resell or supply any substantially similar bulk dataset derived from them,
+          in particular at a lower price than you paid us;
+        </li>
+        <li>
+          publish them online, or otherwise make them available to the public, in any
+          freely accessible or downloadable form;
+        </li>
+        <li>
+          transfer, license or sub-license them to any third party outside your own
+          company without our written authorisation;
+        </li>
         <li>use them for unlawful, deceptive or abusive communications;</li>
         <li>
           scrape, bulk-download or otherwise extract our search results by automated
           means.
         </li>
       </ul>
+      <p>
+        These restrictions are passed through from the licences under which we obtain
+        the underlying data, so we cannot waive them.
+      </p>
 
       <h2>4. Your obligations when contacting buyers</h2>
       <p>
