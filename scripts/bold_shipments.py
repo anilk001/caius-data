@@ -59,10 +59,18 @@ FIELD_MAP: dict[str, tuple[str, ...]] = {
     "Weight Unit": ("weight_unit",),
     "Arrival Date": ("estimated_arrival_date", "bydate"),
     "Carrier": ("carrier_name", "carrier_code"),
+    # Value and quantity are what tell a wholesale buyer from a parcel
+    # consolidator: Stelcore's 51,968 shipments average $5 and one piece each.
+    # They are also the only thing separating two genuinely different shipments
+    # on a record that carries no bill of lading.
+    "Value": ("amount",),
+    "Quantity": ("manifest_qty",),
+    "Quantity Unit": ("manifest_units",),
     # Not a column ingest_csv reads. It rides along so each row fingerprints
     # distinctly: two identical shipments on one day are two shipments, and
     # without a bill of lading number they would hash alike and one would be
-    # dropped as a duplicate on re-run.
+    # dropped as a duplicate on re-run. It is 56% filled on a real pull, which
+    # is why dedupe cannot rely on it alone — see fold_key.
     "Bill of Lading": ("bill_of_lading_nbr",),
 }
 
@@ -196,13 +204,40 @@ def to_row(record: dict) -> dict[str, str] | None:
     return row
 
 
+def fold_key(row: dict[str, str]) -> tuple[str, ...]:
+    """
+    What makes two rows the same shipment rather than two shipments.
+
+    Measured on a real pull of 250 records, and the two cases want opposite
+    rules:
+
+    * **With a bill of lading.** 22 of 84 bills appear more than once under
+      different vendor record ids, and every repeat carries the identical
+      product and HS code. That is one shipment reaching us through two merged
+      sources, so the bill decides and the rest of the row is ignored.
+
+    * **Without one** — 141 of the 250 records. These differ only in value and
+      quantity: $172.09 for 4 cartons against $516.27 for 12, on the same day,
+      to the same buyer, of the same goods. Two shipments. Folding on
+      everything-but-those made 54 of them disappear; folding on the whole row,
+      value and quantity included, leaves 139 of 141 standing.
+
+    Shipment count is what a pack is sold on, so both errors cost money: one
+    inflates the count, the other quietly deletes a quarter of it.
+    """
+    bill = row.get("Bill of Lading", "")
+    if bill:
+        return ("bl", row.get("Consignee Name", ""), bill)
+    return ("row", *(row[column] for column in COLUMNS))
+
+
 def convert(records, keep_type: str | None = None) -> tuple[list[dict], Counter]:
     rows: list[dict] = []
     skipped: Counter = Counter()
-    # One bill of lading arrives more than once, under different record ids.
-    # ingest_csv fingerprints rows against what is already in the database, so
-    # a re-run inserts nothing twice — but two identical rows inside one file
-    # are both new to it, and the company's shipment count is what we sell.
+    # See fold_key. ingest_csv fingerprints rows against what is already in the
+    # database, so a re-run inserts nothing twice — but two copies of one
+    # shipment inside a single file are both new to it, and the company's
+    # shipment count is what we sell.
     seen: set[tuple[str, ...]] = set()
 
     for record in records:
@@ -222,9 +257,9 @@ def convert(records, keep_type: str | None = None) -> tuple[list[dict], Counter]
             skipped["no consignee name"] += 1
             continue
 
-        fingerprint = tuple(row[column] for column in COLUMNS)
+        fingerprint = fold_key(row)
         if fingerprint in seen:
-            skipped["identical to a row already converted"] += 1
+            skipped["the same shipment, filed twice"] += 1
             continue
         seen.add(fingerprint)
 

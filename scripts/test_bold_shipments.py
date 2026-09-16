@@ -23,6 +23,7 @@ from bold_shipments import (
     collapse_repeats,
     convert,
     destination_country,
+    fold_key,
     flagged_as_shipping,
     iso_date,
     to_row,
@@ -226,6 +227,37 @@ domestic = to_row(dict(GLOBAL, consignee_name="JP BODEN SERVICES INC.",
 check("a US buyer in a US port is left alone",
       domestic["Consignee Country"], "US")
 
+# --- What makes two rows the same shipment -----------------------------------
+# Both rules come from a real pull of 250 records. Getting either wrong costs
+# money: one inflates the shipment count a pack is sold on, the other deletes
+# a quarter of it.
+
+# 22 of 84 bills appeared more than once under different vendor record ids,
+# every repeat carrying the identical product. One shipment, two sources.
+bill_a = to_row(dict(GLOBAL, id="1", bill_of_lading_nbr="EXDO62C0288899", amount=0))
+bill_b = to_row(dict(GLOBAL, id="2", bill_of_lading_nbr="EXDO62C0288899", amount=999))
+check("one bill is one shipment, whatever else differs",
+      fold_key(bill_a), fold_key(bill_b))
+
+other_bill = to_row(dict(GLOBAL, id="3", bill_of_lading_nbr="OTHER1"))
+if fold_key(bill_a) == fold_key(other_bill):
+    failures.append("  two different bills folded into one")
+
+# 141 of the 250 carried no bill at all, and differed only in value and
+# quantity: $172.09 for 4 cartons against $516.27 for 12, same day, same buyer,
+# same goods. Two shipments.
+no_bill_a = to_row(dict(GLOBAL, id="4", bill_of_lading_nbr="", amount=172.09, manifest_qty=4))
+no_bill_b = to_row(dict(GLOBAL, id="5", bill_of_lading_nbr="", amount=516.27, manifest_qty=12))
+if fold_key(no_bill_a) == fold_key(no_bill_b):
+    failures.append("  two shipments with no bill folded on value and quantity")
+
+same = to_row(dict(GLOBAL, id="6", bill_of_lading_nbr="", amount=172.09, manifest_qty=4))
+check("an exact repeat with no bill is still one shipment",
+      fold_key(no_bill_a), fold_key(same))
+
+check("value rides through", no_bill_b["Value"], "516.27")
+check("quantity rides through", no_bill_b["Quantity"], "12")
+
 # --- The same shipment filed twice -------------------------------------------
 # ingest_csv checks a row's fingerprint against the database, so a re-run
 # inserts nothing twice. Two identical rows inside one file are both new to it,
@@ -234,7 +266,7 @@ twice = dict(GLOBAL, id=1), dict(GLOBAL, id=2)
 rows, skipped = convert(list(twice))
 check("one shipment, filed under two record ids, is one row", len(rows), 1)
 check("and the fold is counted",
-      skipped["identical to a row already converted"], 1)
+      skipped["the same shipment, filed twice"], 1)
 
 different = dict(GLOBAL, id=3, bill_of_lading_nbr="OTHER123")
 rows, _ = convert([GLOBAL, different])

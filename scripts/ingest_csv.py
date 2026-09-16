@@ -41,6 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from address_parser import parse_us_address  # noqa: E402
 from hs4_classifier import MIN_CONFIDENCE, classify_hs4  # noqa: E402
 from company_cleaning import (  # noqa: E402
+    looks_like_consolidator,
     looks_like_logistics,
     clean_company_name,
     clean_country,
@@ -123,6 +124,11 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
         "shipment date", "date", "bl date", "bill of lading date",
     ),
     "carrier": ("carrier", "carrier name", "vessel carrier", "shipping line", "scac"),
+    # Value and quantity are not stored. They are read so a company's trade
+    # profile can be judged before it is written: a parcel consolidator's name
+    # gives nothing away, its ratios do. See looks_like_consolidator.
+    "value": ("value", "amount", "usd value", "declared value", "invoice value"),
+    "quantity": ("quantity", "manifest qty", "pieces", "qty", "units"),
 }
 
 
@@ -188,6 +194,10 @@ class CompanyAggregate:
     first_seen: date | None = None
     last_seen: date | None = None
     shipment_count: int = 0
+    # Totals for the consolidator test only. Neither is written to the
+    # database; the ratios are what matter and they are judged here.
+    value_total: float = 0.0
+    quantity_total: float = 0.0
 
     def observe(
         self,
@@ -198,8 +208,14 @@ class CompanyAggregate:
         description: str | None,
         port: str | None,
         arrival: date | None,
+        value: float | None = None,
+        quantity: float | None = None,
     ) -> None:
         self.shipment_count += 1
+        if value:
+            self.value_total += value
+        if quantity:
+            self.quantity_total += quantity
 
         # Keep the longest address seen — manifest rows truncate inconsistently.
         if address and (not self.address or len(address) > len(self.address)):
@@ -254,6 +270,7 @@ class Stats:
     address_parsed: int = 0
     address_unparseable: int = 0
     skipped_logistics: int = 0
+    skipped_consolidator: int = 0
     rows_outside_us: int = 0
     companies: int = 0
     shipments_written: int = 0
@@ -269,6 +286,7 @@ class Stats:
             f"  address parsed       {self.address_parsed:>8,}\n"
             f"  address unparseable  {self.address_unparseable:>8,}\n"
             f"  skipped (forwarder)  {self.skipped_logistics:>8,}\n"
+            f"  skipped (parcel)     {self.skipped_consolidator:>8,}\n"
             # Written, not skipped. They keep their real country and search
             # filters them out of US packs — see PACK_COUNTRY in src/lib/search.ts.
             f"  rows outside the US  {self.rows_outside_us:>8,}\n"
@@ -325,6 +343,20 @@ def existing_hashes(client: Client, hashes: list[str]) -> set[str]:
 # --------------------------------------------------------------------------
 # Main
 # --------------------------------------------------------------------------
+
+
+def _number(raw: str | None) -> float | None:
+    """A numeric cell, or None. Manifest exports pad these with commas and $."""
+    if raw is None:
+        return None
+    text = str(raw).replace(",", "").replace("$", "").strip()
+    if not text:
+        return None
+    try:
+        value = float(text)
+    except ValueError:
+        return None
+    return value if value > 0 else None
 
 
 def company_db_key(payload: dict[str, object]) -> str:
@@ -647,7 +679,8 @@ def main() -> int:
                 aggregates[key] = aggregate
 
             aggregate.observe(
-                address, city, state, country, description, port_unlading, arrival
+                address, city, state, country, description, port_unlading, arrival,
+                _number(cell(row, "value")), _number(cell(row, "quantity")),
             )
 
             shipments.append(
@@ -670,6 +703,31 @@ def main() -> int:
                 }
             )
             shipment_keys.append(key)
+
+    # --- Drop parcel consolidators ----------------------------------------
+    # This can only run once the rows are aggregated: the judgement is about a
+    # company's whole trade profile, not any one shipment. Packs are assembled
+    # "top N by volume", so a parcel shipper with 51,968 filings leads every
+    # pack unless something catches it here.
+    if not args.keep_logistics:
+        parcel = [
+            key
+            for key, agg in aggregates.items()
+            if looks_like_consolidator(
+                agg.shipment_count, agg.value_total, agg.quantity_total
+            )
+        ]
+        for key in parcel:
+            stats.skipped_consolidator += aggregates[key].shipment_count
+            del aggregates[key]
+        if parcel:
+            keep_ship, keep_keys = [], []
+            dropped = set(parcel)
+            for shipment, key in zip(shipments, shipment_keys):
+                if key not in dropped:
+                    keep_ship.append(shipment)
+                    keep_keys.append(key)
+            shipments, shipment_keys = keep_ship, keep_keys
 
     stats.companies = len(aggregates)
 
