@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Check, Loader2, ShoppingCart } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { PACKS, type Pack } from '@/lib/packs'
+import { PACKS, proratedAmountCents, type Pack } from '@/lib/packs'
 import { cn, formatUsd } from '@/lib/utils'
 import type { Filters } from '@/lib/validation'
 
@@ -70,6 +70,13 @@ export function PackPicker({
         {PACKS.map((pack) => {
           const capped =
             matchCount !== null && matchCount > 0 && matchCount < pack.recordCount
+          // Priced per company, so a short niche is charged pro rata. The count
+          // shown here is an estimate from the search query; checkout recounts
+          // distinct buyers and is what the buyer is actually charged.
+          const companies = capped ? matchCount : pack.recordCount
+          const price = capped
+            ? proratedAmountCents(pack, matchCount)
+            : pack.amountCents
 
           return (
             <div
@@ -86,8 +93,13 @@ export function PackPicker({
                 </div>
                 <p className="flex items-baseline gap-1.5">
                   <span className="text-3xl font-semibold tracking-tight">
-                    {formatUsd(pack.amountCents)}
+                    {formatUsd(price)}
                   </span>
+                  {capped && (
+                    <span className="text-muted-foreground text-xs line-through">
+                      {formatUsd(pack.amountCents)}
+                    </span>
+                  )}
                   <span className="text-muted-foreground text-xs">one time</span>
                 </p>
               </div>
@@ -96,11 +108,11 @@ export function PackPicker({
                 <li className="flex gap-2">
                   <Check className="text-brand mt-0.5 size-3.5 shrink-0" />
                   <span>
-                    Up to{' '}
                     <span className="text-foreground font-medium">
-                      {pack.recordCount}
+                      {companies.toLocaleString('en-US')}
                     </span>{' '}
                     importer companies
+                    {capped ? '' : ' — one row each, never duplicated'}
                   </span>
                 </li>
                 <li className="flex gap-2">
@@ -116,7 +128,8 @@ export function PackPicker({
               {capped && (
                 <p className="text-muted-foreground text-xs">
                   Your filters match ~{matchCount.toLocaleString('en-US')} companies,
-                  so you&apos;ll receive those — you are never charged for empty rows.
+                  so the price is reduced to match. You are never charged for
+                  rows we cannot supply.
                 </p>
               )}
 
@@ -133,7 +146,7 @@ export function PackPicker({
                 ) : (
                   <>
                     <ShoppingCart />
-                    Buy {pack.recordCount} buyers
+                    Buy {companies.toLocaleString('en-US')} companies
                   </>
                 )}
               </Button>

@@ -201,10 +201,31 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
   // The order row carries what was actually delivered, not what was ordered.
   // The delivery email reads its count from here, so a short pack says so
   // rather than claiming a number the file does not contain.
+  //
+  // Checkout already priced the pack pro rata on the count it saw, so a
+  // shortfall here means the two counts disagreed — the data changed between
+  // payment and fulfilment. That is an overcharge, and it is recorded on the
+  // order and logged rather than left for the buyer to notice.
   if (ordered.length !== recordCount) {
+    const overcharged = ordered.length < recordCount
+    if (overcharged) {
+      console.error(
+        `Order ${orderId}: paid for ${recordCount} companies, delivered ` +
+          `${ordered.length}. Refund the difference to ${email}.`,
+      )
+    }
     await admin
       .from('orders')
-      .update({ record_count: ordered.length })
+      .update({
+        record_count: ordered.length,
+        query_params: {
+          pack_id: packId,
+          ...filters,
+          ...(overcharged
+            ? { paid_for: recordCount, refund_owed_for: recordCount - ordered.length }
+            : {}),
+        },
+      })
       .eq('id', orderId)
   }
 

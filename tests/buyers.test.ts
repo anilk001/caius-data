@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import { buyerKey, mergeByBuyer, overFetch, type Buyer } from '../src/lib/buyers.ts'
 import { MAX_SEARCH_LIMIT } from '../src/lib/search-limits.ts'
+import { PACKS, proratedAmountCents, isTooSmallToSell } from '../src/lib/packs.ts'
 import type { CompanyRow } from '../src/types/database.ts'
 
 /**
@@ -169,5 +170,44 @@ describe('overFetch', () => {
     const merged = mergeByBuyer(rows.slice(0, overFetch(200, MAX_SEARCH_LIMIT)))
     assert.ok(merged.length >= 200, `only ${merged.length} distinct buyers`)
     assert.equal(merged.slice(0, 200).length, 200)
+  })
+})
+
+describe('pro-rata pricing for a short niche', () => {
+  const pack = { id: 'p', name: 'Starter', recordCount: 200, amountCents: 1900, blurb: '' }
+
+  it('charges full price when the niche is full', () => {
+    assert.equal(proratedAmountCents(pack, 200), 1900)
+    assert.equal(proratedAmountCents(pack, 500), 1900)
+  })
+
+  it('charges the fraction actually delivered', () => {
+    // 120 of 200 companies is 60% of the pack, so 60% of the price.
+    assert.equal(proratedAmountCents(pack, 120), 1140)
+    assert.equal(proratedAmountCents(pack, 100), 950)
+  })
+
+  it('rounds the buyer\u2019s way, never ours', () => {
+    // 1900 * 7 / 200 = 66.5 cents. Floored, not rounded up.
+    assert.equal(proratedAmountCents(pack, 7), 66)
+  })
+
+  it('never charges for a pack it cannot fill at all', () => {
+    assert.equal(proratedAmountCents(pack, 0), 0)
+    assert.equal(proratedAmountCents(pack, -5), 0)
+  })
+
+  it('refuses a sale below what Stripe will process', () => {
+    // 5 companies of a $19/200 pack is 47 cents; Stripe's floor is 50.
+    assert.equal(isTooSmallToSell(pack, 5), true)
+    assert.equal(isTooSmallToSell(pack, 6), false)
+    assert.equal(isTooSmallToSell(pack, 200), false)
+  })
+
+  it('prices every real pack sanely at one company', () => {
+    for (const real of PACKS) {
+      const one = proratedAmountCents(real, 1)
+      assert.ok(one >= 0 && one < real.amountCents, `${real.id} priced oddly at 1`)
+    }
   })
 })

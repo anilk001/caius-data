@@ -2,7 +2,11 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getStripe } from '@/lib/stripe'
-import { getPack } from '@/lib/packs'
+import {
+  getPack,
+  isTooSmallToSell,
+  proratedAmountCents,
+} from '@/lib/packs'
 import { searchCompanies } from '@/lib/search'
 import { mergeByBuyer, overFetch } from '@/lib/buyers'
 import { MAX_SEARCH_LIMIT } from '@/lib/search-limits'
@@ -105,6 +109,21 @@ export async function POST(request: NextRequest) {
     const buyers = mergeByBuyer(available as unknown as CompanyRow[])
     const deliverable = Math.min(buyers.length, pack.recordCount)
 
+    // Short niche, pro-rata price. 120 of 200 companies costs 120/200 of the
+    // pack, never the full price for a short file.
+    const amountCents = proratedAmountCents(pack, deliverable)
+
+    if (isTooSmallToSell(pack, deliverable)) {
+      return NextResponse.json(
+        {
+          error:
+            `Only ${deliverable} ${deliverable === 1 ? 'company matches' : 'companies match'} ` +
+            `those filters — too few to be worth selling. Try a broader HS code or drop a filter.`,
+        },
+        { status: 409 },
+      )
+    }
+
     const origin = siteUrl()
     const nicheLabel = [filters.keyword, filters.hs4 ? `HS ${filters.hs4}` : null]
       .filter(Boolean)
@@ -121,7 +140,7 @@ export async function POST(request: NextRequest) {
           quantity: 1,
           price_data: {
             currency: 'usd',
-            unit_amount: pack.amountCents,
+            unit_amount: amountCents,
             product_data: {
               name: `Caius Data — ${pack.name} pack (${deliverable} companies)`,
               description: `${nicheLabel}. One-time purchase, delivered as CSV. No subscription.`,
@@ -155,7 +174,7 @@ export async function POST(request: NextRequest) {
       customer_email: email ?? 'pending@checkout.invalid',
       hs4_code: filters.hs4 ?? '0000',
       record_count: deliverable,
-      amount_cents: pack.amountCents,
+      amount_cents: amountCents,
       status: 'pending',
       query_params: {
         pack_id: pack.id,

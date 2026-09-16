@@ -48,3 +48,30 @@ export function getPack(id: string | null | undefined): Pack | undefined {
 }
 
 export const FREE_SAMPLE_ROWS = 3
+
+/**
+ * Stripe will not process a USD charge below 50 cents, and a pack that small is
+ * not worth selling anyway — the free sample is already three rows.
+ */
+export const STRIPE_MIN_CHARGE_CENTS = 50
+
+/**
+ * What to charge when a niche holds fewer companies than the pack advertises.
+ *
+ * A pack is priced per company, so 120 of 200 costs 120/200 of the price. The
+ * alternative — full price for a short file — is what a buyer notices on their
+ * first purchase and never forgives, and the pack picker has always promised
+ * that you are never charged for empty rows.
+ *
+ * Integer arithmetic, floored, so rounding can only ever go the buyer's way.
+ */
+export function proratedAmountCents(pack: Pack, deliverable: number): number {
+  if (deliverable >= pack.recordCount) return pack.amountCents
+  if (deliverable <= 0) return 0
+  return Math.floor((pack.amountCents * deliverable) / pack.recordCount)
+}
+
+/** True when a short pack would fall below what Stripe will process. */
+export function isTooSmallToSell(pack: Pack, deliverable: number): boolean {
+  return proratedAmountCents(pack, deliverable) < STRIPE_MIN_CHARGE_CENTS
+}
