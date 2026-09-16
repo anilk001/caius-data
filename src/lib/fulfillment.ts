@@ -7,6 +7,7 @@ import { csvFilename, toCsv, withBom } from '@/lib/csv'
 import { PACK_COLUMNS } from '@/lib/export-columns'
 import { mergeByBuyer, overFetch } from '@/lib/buyers'
 import { MIN_RECORDS } from '@/lib/pricing'
+import { formatHs4List, parseHs4List } from '@/lib/hs4'
 import { MAX_PACK_RECORDS } from '@/lib/search-limits'
 import { sendPackDeliveryEmail } from '@/lib/email'
 import { EXPORT_BUCKET } from '@/lib/env'
@@ -15,7 +16,7 @@ const SEVEN_DAYS_SECONDS = 60 * 60 * 24 * 7
 
 interface DeliveryContext {
   email: string
-  filters: { keyword: string | null; hs4: string | null; port: string | null; state: string | null }
+  filters: { keyword: string | null; hs4: string[]; port: string | null; state: string | null }
   recordCount: number
   session: Stripe.Checkout.Session
 }
@@ -49,7 +50,8 @@ async function deliverExistingPack(
     to: ctx.email,
     downloadUrl: signed.signedUrl,
     expiresAt,
-    hs4: ctx.filters.hs4 || 'all',
+    // Readable in an email, unlike the comma-packed URL form.
+    hs4: ctx.filters.hs4.join(', ') || 'all',
     keyword: ctx.filters.keyword,
     recordCount: ctx.recordCount,
     amountCents: ctx.session.amount_total ?? 0,
@@ -88,7 +90,7 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
 
   const filters = {
     keyword: metadata.keyword || null,
-    hs4: metadata.hs4 || null,
+    hs4: parseHs4List(metadata.hs4),
     port: metadata.port || null,
     state: metadata.state || null,
   }
@@ -149,7 +151,7 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
       .insert({
         stripe_session_id: sessionId,
         customer_email: email,
-        hs4_code: filters.hs4 ?? '0000',
+        hs4_code: formatHs4List(filters.hs4) || '0000',
         record_count: recordCount,
         amount_cents: session.amount_total ?? 0,
         status: 'pending',
@@ -229,7 +231,7 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
   // --- 3. Upload to private storage ----------------------------------------
   const filename = csvFilename([
     'caius-data',
-    filters.hs4,
+    ...filters.hs4,
     filters.keyword,
     `${ordered.length}-importers`,
   ])

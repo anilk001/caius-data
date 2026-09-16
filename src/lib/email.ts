@@ -15,6 +15,7 @@ export interface DeliveryEmail {
   to: string
   downloadUrl: string
   expiresAt: Date
+  /** One heading, or several joined with ", " — packs may span headings. */
   hs4: string
   keyword?: string | null
   recordCount: number
@@ -68,7 +69,7 @@ function renderHtml(input: DeliveryEmail): string {
           <hr style="border:none;border-top:1px solid #e4e4e7;margin:20px 0;" />
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;color:#52525b;">
             <tr><td style="padding:3px 0;">Pack</td><td align="right">${escapeHtml(input.packName)} · ${input.recordCount} records</td></tr>
-            <tr><td style="padding:3px 0;">HS code</td><td align="right">${escapeHtml(input.hs4)}</td></tr>
+            <tr><td style="padding:3px 0;">HS code${input.hs4.includes(',') ? 's' : ''}</td><td align="right">${escapeHtml(input.hs4)}</td></tr>
             <tr><td style="padding:3px 0;">Paid</td><td align="right">${formatUsd(input.amountCents)} (one time)</td></tr>
           </table>
         </td>
@@ -92,7 +93,8 @@ function renderText(input: DeliveryEmail): string {
     'Your Caius Data buyer pack is ready.',
     '',
     `Pack: ${input.packName} (${input.recordCount} US importer companies)`,
-    `HS code: ${input.hs4}${input.keyword ? ` · ${input.keyword}` : ''}`,
+    `HS code${input.hs4.includes(',') ? 's' : ''}: ${input.hs4}` +
+      `${input.keyword ? ` · ${input.keyword}` : ''}`,
     `Paid: ${formatUsd(input.amountCents)} (one time)`,
     '',
     'Download:',
@@ -116,7 +118,7 @@ export async function sendPackDeliveryEmail(input: DeliveryEmail) {
     from,
     to: input.to,
     ...(replyTo ? { replyTo } : {}),
-      subject: `Your ${input.recordCount} US buyer records (HS ${input.hs4}) are ready`,
+      subject: `Your ${input.recordCount} US buyer companies (HS ${input.hs4}) are ready`,
     html: renderHtml(input),
     text: renderText(input),
   })

@@ -57,6 +57,22 @@ Ordering gained `id` as a final tiebreaker. Two rows with the same shipment
 count and name previously sorted arbitrarily, which is harmless in one query and
 not in sixteen: a row could land on two pages or on none.
 
+## Several headings in one list
+
+A search carries up to 20 HS4 headings, not one. An exporter who makes dresses
+(6204) also makes blouses (6206) and skirts, and the buyers overlap — so one
+list covering all three is both a better product and a bigger sale.
+
+The merge does the work that makes it honest. A buyer importing under two of the
+chosen headings is **one row**, with both codes in the HS4 Code column, not two
+rows charged twice. Adding a heading therefore adds buyers rather than
+duplicates, and the count the buyer pays for is a count of companies either way.
+
+Codes accumulate in the search box rather than replacing one another, the
+"Popular" chips add rather than reset, and the URL carries them all
+(`?hs4=6204,6206,6203`) so a filtered view stays shareable. A link shared before
+any of this existed still opens.
+
 ## What a row is
 
 **One row is one company.** Not one shipment, not one company-location. A buyer

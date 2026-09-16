@@ -1,15 +1,18 @@
 import { z } from 'zod'
 import { MIN_RECORDS } from '@/lib/pricing'
+import { MAX_HS4_CODES, parseHs4List } from '@/lib/hs4'
 
 /** Shared filter shape for search, sample CSV and checkout. */
 export const filtersSchema = z.object({
   keyword: z.string().trim().max(120).optional().nullable(),
+  // One search may carry several headings — "6204,6203,6109" from the chips
+  // input, or a bare "6204" from a link shared before multi-select existed.
   hs4: z
-    .string()
-    .trim()
-    .regex(/^\d{4}$/, 'HS code must be 4 digits')
-    .optional()
-    .nullable(),
+    .preprocess(
+      (value) => (value == null ? [] : parseHs4List(value as string | string[])),
+      z.array(z.string().regex(/^\d{4}$/)).max(MAX_HS4_CODES),
+    )
+    .optional(),
   port: z.string().trim().max(80).optional().nullable(),
   state: z.string().trim().max(40).optional().nullable(),
 })
@@ -44,7 +47,7 @@ export function filtersFromSearchParams(params: URLSearchParams): Filters {
   if (!parsed.success) {
     return {
       keyword: pick('keyword') ?? null,
-      hs4: null,
+      hs4: [],
       port: pick('port') ?? null,
       state: pick('state') ?? null,
     }
@@ -54,5 +57,7 @@ export function filtersFromSearchParams(params: URLSearchParams): Filters {
 }
 
 export function hasAnyFilter(filters: Filters): boolean {
-  return Boolean(filters.keyword || filters.hs4 || filters.port || filters.state)
+  return Boolean(
+    filters.keyword || filters.hs4?.length || filters.port || filters.state,
+  )
 }

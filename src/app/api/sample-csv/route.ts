@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     const csv = withBom(toCsv(rows, SAMPLE_COLUMNS))
     const filename = csvFilename([
       'caius-data-sample',
-      filters.hs4,
+      ...(filters.hs4 ?? []),
       filters.keyword,
     ])
 

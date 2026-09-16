@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { ResultsTable } from '@/components/search/results-table'
 import { PackPicker } from '@/components/search/pack-picker'
+import { formatHs4List, parseHs4List, MAX_HS4_CODES } from '@/lib/hs4'
 import { COMMON_PORTS, HS_SUGGESTIONS, describeHs4 } from '@/lib/hs-codes'
 import { FREE_SAMPLE_ROWS } from '@/lib/packs'
 import type { Filters } from '@/lib/validation'
@@ -22,7 +23,7 @@ interface SearchResponse {
   filtered: boolean
 }
 
-const EMPTY: Filters = { keyword: '', hs4: '', port: '', state: '' }
+const EMPTY: Filters = { keyword: '', hs4: [], port: '', state: '' }
 
 export function SearchDashboard() {
   const router = useRouter()
@@ -32,7 +33,7 @@ export function SearchDashboard() {
   // per keystroke; the debounce below decides when a draft becomes a search.
   const [draft, setDraft] = useState<Filters>(() => ({
     keyword: searchParams.get('keyword') ?? '',
-    hs4: searchParams.get('hs4') ?? '',
+    hs4: parseHs4List(searchParams.get('hs4')),
     port: searchParams.get('port') ?? '',
     state: searchParams.get('state') ?? '',
   }))
@@ -52,19 +53,38 @@ export function SearchDashboard() {
   // Bumped by the retry button. Clearing `result` alone would not re-run the
   // effect, because queryString has not changed — it would hang on loading.
   const [retryToken, setRetryToken] = useState(0)
+  // What is being typed into the HS box, before it becomes a chip.
+  const [hsDraft, setHsDraft] = useState('')
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams()
-    for (const [key, value] of Object.entries(applied)) {
-      const trimmed = value?.trim()
+    // Headings travel as one comma-separated value, so a shared link carries
+    // the whole selection and still opens in a browser that predates it.
+    if (applied.hs4?.length) params.set('hs4', formatHs4List(applied.hs4))
+    for (const key of ['keyword', 'port', 'state'] as const) {
+      const trimmed = applied[key]?.trim()
       if (trimmed) params.set(key, trimmed)
     }
     return params.toString()
   }, [applied])
 
   const hasFilters = Boolean(
-    applied.keyword?.trim() || applied.hs4?.trim() || applied.port?.trim() || applied.state?.trim(),
+    applied.keyword?.trim() ||
+      applied.hs4?.length ||
+      applied.port?.trim() ||
+      applied.state?.trim(),
   )
+
+  const codes = draft.hs4 ?? []
+
+  function addCode(raw: string) {
+    setDraft((d) => ({ ...d, hs4: parseHs4List([...(d.hs4 ?? []), raw]) }))
+    setHsDraft('')
+  }
+
+  function removeCode(code: string) {
+    setDraft((d) => ({ ...d, hs4: (d.hs4 ?? []).filter((c) => c !== code) }))
+  }
 
   // Debounce draft -> applied.
   useEffect(() => {
@@ -149,7 +169,7 @@ export function SearchDashboard() {
   }
 
   const rows = data?.rows ?? []
-  const hsLabel = describeHs4(applied.hs4?.trim())
+  const hsLabel = applied.hs4?.length === 1 ? describeHs4(applied.hs4[0]) : null
 
   return (
     <div className="space-y-8">
@@ -167,17 +187,38 @@ export function SearchDashboard() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="hs4">HS4 code</Label>
+            <Label htmlFor="hs4">
+              HS4 codes{' '}
+              {codes.length > 0 && (
+                <span className="text-muted-foreground font-normal">
+                  ({codes.length})
+                </span>
+              )}
+            </Label>
             <Input
               id="hs4"
               inputMode="numeric"
               maxLength={4}
-              placeholder="6204"
+              placeholder={codes.length ? 'add another…' : '6204'}
               className="tnum font-mono"
-              value={draft.hs4 ?? ''}
-              onChange={(e) =>
-                setDraft((d) => ({ ...d, hs4: e.target.value.replace(/\D/g, '').slice(0, 4) }))
-              }
+              value={hsDraft}
+              disabled={codes.length >= MAX_HS4_CODES}
+              onChange={(e) => {
+                const digits = e.target.value.replace(/\D/g, '').slice(0, 4)
+                // Four digits is a complete heading, so it becomes a chip on
+                // its own — nobody should have to press Enter to be understood.
+                if (digits.length === 4) addCode(digits)
+                else setHsDraft(digits)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && hsDraft) {
+                  e.preventDefault()
+                  addCode(hsDraft)
+                }
+                if (e.key === 'Backspace' && !hsDraft && codes.length) {
+                  removeCode(codes[codes.length - 1])
+                }
+              }}
             />
           </div>
 
@@ -215,21 +256,48 @@ export function SearchDashboard() {
           </div>
         </div>
 
+        {/* Chosen headings — removable, so a mis-typed code is one click to undo */}
+        {codes.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center gap-1.5">
+            {codes.map((code) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => removeCode(code)}
+                className="border-brand/40 bg-brand/5 hover:bg-brand/10 inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors"
+                title={`Remove ${describeHs4(code) ?? code}`}
+              >
+                <span className="tnum font-mono">{code}</span>
+                <X className="size-3 opacity-60" />
+              </button>
+            ))}
+            {codes.length > 1 && (
+              <span className="text-muted-foreground ml-1 text-xs">
+                buyers of any of these {codes.length} headings, each company once
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Quick-start chips */}
         <div className="mt-4 flex flex-wrap items-center gap-1.5">
-          <span className="text-muted-foreground mr-1 text-xs">Popular:</span>
-          {HS_SUGGESTIONS.slice(0, 8).map((s) => (
+          <span className="text-muted-foreground mr-1 text-xs">
+            {codes.length ? 'Add:' : 'Popular:'}
+          </span>
+          {HS_SUGGESTIONS.filter((h) => !codes.includes(h.code))
+            .slice(0, 8)
+            .map((s) => (
             <button
               key={s.code}
               type="button"
-              onClick={() => setDraft({ ...EMPTY, hs4: s.code })}
+              onClick={() => addCode(s.code)}
               className="border-border hover:border-foreground/30 hover:bg-accent rounded-md border px-2 py-1 text-xs transition-colors"
               title={s.label}
             >
               <span className="tnum font-mono">{s.code}</span>
               <span className="text-muted-foreground ml-1.5">{s.sector}</span>
             </button>
-          ))}
+            ))}
           {hasFilters && (
             <button
               type="button"
@@ -320,7 +388,7 @@ export function SearchDashboard() {
 
       <PackPicker
         filters={applied}
-        disabled={!applied.keyword?.trim() && !applied.hs4?.trim()}
+        disabled={!applied.keyword?.trim() && !applied.hs4?.length}
         matchCount={data?.total ?? null}
       />
     </div>

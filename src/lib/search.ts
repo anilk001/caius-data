@@ -3,7 +3,7 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { CompanyRow, Database, PublicCompany } from '@/types/database'
 import { PUBLIC_COMPANY_COLUMNS } from '@/types/database'
-import { isHs4, normalizeHs4 } from '@/lib/hs4'
+import { isHs4, normalizeHs4, parseHs4List } from '@/lib/hs4'
 import { MAX_PACK_RECORDS, MAX_SEARCH_LIMIT, PAGE_SIZE } from '@/lib/search-limits'
 import { collectPaged, countPaged } from '@/lib/paging'
 
@@ -12,7 +12,8 @@ export { normalizeHs4, MAX_SEARCH_LIMIT, MAX_PACK_RECORDS }
 
 export interface SearchFilters {
   keyword?: string | null
-  hs4?: string | null
+  /** One or many HS4 headings. More headings, more buyers — and a bigger sale. */
+  hs4?: string[] | string | null
   port?: string | null
   state?: string | null
 }
@@ -158,9 +159,13 @@ function runCompanyQuery(
     count: options.withCount ? 'estimated' : undefined,
   })
 
-  const hs4 = normalizeHs4(options.hs4)
-  if (hs4) {
-    query = query.eq('hs4_code', hs4)
+  const hs4Codes = parseHs4List(options.hs4)
+  if (hs4Codes.length === 1) {
+    query = query.eq('hs4_code', hs4Codes[0])
+  } else if (hs4Codes.length > 1) {
+    // A buyer importing under two of the chosen headings still comes back as
+    // one row: mergeByBuyer collapses them and lists both codes.
+    query = query.in('hs4_code', hs4Codes)
   }
 
   const keyword = options.keyword ? sanitizeKeyword(options.keyword) : ''
@@ -168,7 +173,7 @@ function runCompanyQuery(
     // A bare 4-digit keyword is almost always someone typing an HS code into
     // the wrong box; treat it as one rather than returning nothing.
     const asHs4 = normalizeHs4(keyword)
-    if (!hs4 && asHs4 && isHs4(keyword)) {
+    if (hs4Codes.length === 0 && asHs4 && isHs4(keyword)) {
       query = query.eq('hs4_code', asHs4)
     } else {
       query = query.textSearch('search_tsv', keyword, {

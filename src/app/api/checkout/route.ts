@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getStripe } from '@/lib/stripe'
 import { priceCents, MIN_RECORDS } from '@/lib/pricing'
+import { formatHs4List } from '@/lib/hs4'
 import { countBuyers } from '@/lib/search'
 import { mergeByBuyer } from '@/lib/buyers'
 import type { CompanyRow } from '@/types/database'
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  if (!filters.hs4 && !filters.keyword) {
+  if (!filters.hs4?.length && !filters.keyword) {
     return NextResponse.json(
       { error: 'Choose an HS code or keyword before buying a pack.' },
       { status: 400 },
@@ -109,7 +110,10 @@ export async function POST(request: NextRequest) {
     }
 
     const origin = siteUrl()
-    const nicheLabel = [filters.keyword, filters.hs4 ? `HS ${filters.hs4}` : null]
+    const nicheLabel = [
+      filters.keyword,
+      filters.hs4?.length ? `HS ${filters.hs4.join(', ')}` : null,
+    ]
       .filter(Boolean)
       .join(' · ')
 
@@ -135,7 +139,7 @@ export async function POST(request: NextRequest) {
       // Everything fulfilment needs, so the webhook is self-contained.
       metadata: {
         record_count: String(deliverable),
-        hs4: filters.hs4 ?? '',
+        hs4: formatHs4List(filters.hs4),
         keyword: filters.keyword ?? '',
         port: filters.port ?? '',
         state: filters.state ?? '',
@@ -155,14 +159,14 @@ export async function POST(request: NextRequest) {
     const { error } = await admin.from('orders').insert({
       stripe_session_id: session.id,
       customer_email: email ?? 'pending@checkout.invalid',
-      hs4_code: filters.hs4 ?? '0000',
+      hs4_code: formatHs4List(filters.hs4) || '0000',
       record_count: deliverable,
       amount_cents: amountCents,
       status: 'pending',
       query_params: {
         records: deliverable,
         keyword: filters.keyword ?? null,
-        hs4: filters.hs4 ?? null,
+        hs4: filters.hs4 ?? [],
         port: filters.port ?? null,
         state: filters.state ?? null,
       },

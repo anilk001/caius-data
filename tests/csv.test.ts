@@ -2,7 +2,13 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { csvFilename, toCsv, withBom, type CsvColumn } from '../src/lib/csv.ts'
-import { normalizeHs4, isHs4 } from '../src/lib/hs4.ts'
+import {
+  normalizeHs4,
+  isHs4,
+  parseHs4List,
+  formatHs4List,
+  MAX_HS4_CODES,
+} from '../src/lib/hs4.ts'
 import { MAX_SEARCH_LIMIT, MAX_PACK_RECORDS } from '../src/lib/search-limits.ts'
 import { priceCents, MIN_RECORDS } from '../src/lib/pricing.ts'
 import { formatUsd } from '../src/lib/utils.ts'
@@ -142,5 +148,46 @@ describe('formatUsd', () => {
 
   it('keeps cents when they matter', () => {
     assert.equal(formatUsd(1999), '$19.99')
+  })
+})
+
+describe('multi-heading selection', () => {
+  it('parses one code, many codes, and a pasted list alike', () => {
+    assert.deepEqual(parseHs4List('6204'), ['6204'])
+    assert.deepEqual(parseHs4List('6204,6203'), ['6204', '6203'])
+    assert.deepEqual(parseHs4List('6204 6203; 6109'), ['6204', '6203', '6109'])
+    assert.deepEqual(parseHs4List(['6204', '6203']), ['6204', '6203'])
+  })
+
+  it('keeps a link shared before multi-select existed working', () => {
+    assert.deepEqual(parseHs4List('6204'), ['6204'])
+    assert.deepEqual(parseHs4List(null), [])
+    assert.deepEqual(parseHs4List(''), [])
+  })
+
+  it('takes the heading off a longer tariff code', () => {
+    // People paste 10-digit HTS codes straight out of an invoice.
+    assert.deepEqual(parseHs4List('6204420000, 6203320000'), ['6204', '6203'])
+  })
+
+  it('drops duplicates while keeping the order given', () => {
+    assert.deepEqual(parseHs4List('6204,6203,6204'), ['6204', '6203'])
+  })
+
+  it('ignores anything that is not a heading', () => {
+    assert.deepEqual(parseHs4List('62,abc,6204'), ['6204'])
+  })
+
+  it('caps the list so a hand-edited URL cannot run away', () => {
+    const many = Array.from({ length: MAX_HS4_CODES + 30 }, (_, i) =>
+      String(1000 + i),
+    ).join(',')
+    assert.equal(parseHs4List(many).length, MAX_HS4_CODES)
+  })
+
+  it('round-trips through a URL value', () => {
+    const codes = ['6204', '6203', '6109']
+    assert.deepEqual(parseHs4List(formatHs4List(codes)), codes)
+    assert.equal(formatHs4List([]), '')
   })
 })
