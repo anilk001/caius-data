@@ -1,0 +1,91 @@
+========================================================================
+1. WHAT THE DATA COSTS
+========================================================================
+pack           credits     price   $/1k credits   company records
+------------------------------------------------------------------------
+Micro           25,000        59           2.36             1,666
+Starter         50,000        79           1.58             3,333
+Growth         200,000       199           0.99            13,333
+Scale        1,000,000       690           0.69            66,666
+Volume       5,000,000     1,950           0.39           333,333
+
+A segment = one HS4 heading x one origin country, e.g. 6204 from India.
+Buying one is a one-off: the licence permits permanent storage and reuse
+across unlimited packs and customers, so the same segment is sold again
+and again at no further data cost.
+
+segment size         credits   Growth pack    Scale pack
+------------------------------------------------------------------------
+200 companies          3,000          2.98          2.07
+500 companies          7,500          7.46          5.17
+1,000 companies       15,000         14.93         10.35
+5,000 companies       75,000         74.62         51.75
+15,916 companies     238,740        237.55        164.73
+
+========================================================================
+2. WHAT IT COSTS TO RUN, YEAR ONE
+========================================================================
+  Boldata setup fee                           499.00   once
+  LLC formation (est)                         150.00   once
+  Supabase Pro                                300.00   /year
+  Railway hosting (est)                       120.00   /year
+  Resend (free tier, 3k/month)                  0.00   /year
+  Domain                                       15.00   /year
+  Wyoming registered agent (est)              150.00   /year
+  Wyoming annual report                        60.00   /year
+  US tax filing 5472 + 1120 (est)             500.00   /year
+  First credit pack (Growth, 200k)            199.00   once
+------------------------------------------------------------------------
+  YEAR ONE TOTAL                            1,993.00
+  Year two onwards (no setup/formation)     1,145.00  + credits
+
+========================================================================
+3. WHAT WE HAVE TO SELL AT
+========================================================================
+Data cost per sale approaches zero once a segment is bought, so the only
+real per-sale cost is Stripe. Stripe's fixed 30c is what punishes a very
+low price — it is 1.6% of $19 but 6% of $5.
+
+   price   Stripe fee       net    fee %   sales to break even yr1
+------------------------------------------------------------------------
+       5         0.52      4.48   10.4%                       445
+       9         0.70      8.30    7.7%                       240
+      12         0.83     11.17    6.9%                       178
+      19         1.14     17.86    6.0%                       112
+      29         1.58     27.42    5.4%                        73
+      39         2.02     36.98    5.2%                        54
+      49         2.46     46.54    5.0%                        43
+      79         3.78     75.22    4.8%                        26
+
+Year two onwards, with a $199 credit top-up:
+   price       net     sales to break even   profit at 500 sales
+------------------------------------------------------------------------
+       9      8.30                     162                 2,808
+      19     17.86                      75                 7,588
+      29     27.42                      49                12,368
+      39     36.98                      36                17,148
+      49     46.54                      29                21,928
+
+========================================================================
+4. WHAT THE MARKET CHARGES
+========================================================================
+competitor                         per month   first-year cost
+------------------------------------------------------------------------
+ImportYeti paid (from, est)            10.00            120.00
+Seair (from, $80/6mo)                  13.33            160.00
+Volza Startup                         125.00          1,500.00
+ImportGenius USA Essentials           229.00          2,198.00
+Export Genius (from)                  278.00          3,336.00
+Boldata own 'lead building'           299.00          3,588.00
+ImportGenius USA Pro                  449.00          4,310.00
+Volza SME                             375.00          4,500.00
+
+The cheapest committed alternative is roughly $120-160 for a year.
+Everything with real filtering starts at $1,500/year.
+
+   our price   vs cheapest ($120/yr)    vs Volza Startup   vs ImportGenius
+------------------------------------------------------------------------
+           9                     13x                167x              244x
+          19                      6x                 79x              116x
+          29                      4x                 52x               76x
+          49                      2x                 31x               45x
