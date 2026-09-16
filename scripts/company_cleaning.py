@@ -529,6 +529,48 @@ def looks_like_logistics(name: str | None) -> bool:
     return not any(safe in text for safe in _LOGISTICS_SAFE)
 
 
+# The country field arrives spelled every way a filer can spell it. A pack sold
+# as "US importers" is filtered on this column, so an unrecognised spelling of
+# the United States would drop real buyers out of every pack, silently. One
+# normalisation at the boundary means the database only ever holds ISO codes
+# and the filter can be an equality test.
+_COUNTRY_CODES = {
+    "us": "US", "usa": "US", "u s a": "US", "u s": "US",
+    "united states": "US", "united states of america": "US",
+    "america": "US", "united states minor outlying islands": "US",
+    "ca": "CA", "can": "CA", "canada": "CA",
+    "mx": "MX", "mex": "MX", "mexico": "MX",
+    "in": "IN", "ind": "IN", "india": "IN",
+    "cn": "CN", "china": "CN", "peoples republic of china": "CN",
+    "vn": "VN", "vietnam": "VN", "viet nam": "VN",
+    "sg": "SG", "singapore": "SG",
+    "my": "MY", "malaysia": "MY",
+    "gb": "GB", "uk": "GB", "united kingdom": "GB",
+    "pr": "PR", "puerto rico": "PR",
+}
+
+
+def clean_country(raw: str | None) -> str | None:
+    """
+    Normalise a country to its ISO two-letter code where we can.
+
+    An unrecognised value is handed back unchanged rather than guessed at. A
+    wrong guess here relabels a buyer's nationality, which is the one claim the
+    front page makes.
+    """
+    if not raw:
+        return None
+    text = _WS.sub(" ", str(raw)).strip()
+    if not text or text.lower() in _PLACEHOLDER_NAMES:
+        return None
+    key = _WS.sub(" ", re.sub(r"[^a-z ]+", " ", text.lower())).strip()
+    if key in _COUNTRY_CODES:
+        return _COUNTRY_CODES[key]
+    if len(text) == 2 and text.isalpha():
+        return text.upper()
+    return text
+
+
 def clean_state(raw: str | None) -> str | None:
     """Normalise a US state to its two-letter code where we can."""
     if not raw:

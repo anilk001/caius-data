@@ -267,15 +267,37 @@ The vendor ships an `is_shipping` flag on every record, free, and
 `bold_shipments.py` now honours it. It is a second opinion independent of the
 name, which is all `looks_like_logistics` has to go on.
 
-**Canadian consignees in a US pack — a product decision, not a bug.** Five of
-the 75 were Gap (Canada) Inc, Old Navy (Canada) Inc, PVH Canada, SML Canada
-Acquisition and American Eagle Outfitters Canada. `country_imp` says US on all
-of them; `end_port` says BRAMPTON, which is Ontario. The feed is US-facing, not
-a statement about where the buyer sits. `bold_shipments.py` now lets an
-unambiguous port of unlading override the country and prints a count of rows
-unladen outside the US, so the rows are labelled rather than silently sold as
-US importers. Whether a "US buyers" pack should carry them at all is still
-open — they are genuine buyers of Indian apparel, just not American ones.
+**Canadian consignees are kept out of US packs — decided.** Five of the 75 were
+Gap (Canada) Inc, Old Navy (Canada) Inc, PVH Canada, SML Canada Acquisition and
+American Eagle Outfitters Canada. `country_imp` says US on all of them;
+`end_port` says BRAMPTON, which is Ontario. The feed is US-facing, not a
+statement about where the buyer sits. They are genuine buyers of Indian
+apparel, and they are not American, and every page on the site says US
+importers.
+
+Four pieces, so the claim holds wherever it is read:
+
+* `bold_shipments.py` lets an unambiguous port of unlading override the feed's
+  country, and prints a count of rows unladen outside the US. Only unambiguous
+  port names are listed — Richmond, Windsor and Delta are US cities too, and
+  guessing wrong there would relabel a real US buyer as foreign.
+* `clean_country()` normalises the value to an ISO code before it is written,
+  so the filter is an equality test rather than a list of spellings that has to
+  stay in step with the vendor's. An unrecognised spelling of "United States"
+  reaching the database would drop real buyers out of every pack, silently.
+* Migration `20260101000005` makes the country deterministic when a company has
+  mixed filings: aggregation used to pick whichever row sorted first, and the
+  upsert never updated country at all, so a company first seen unlading in
+  Brampton kept `CA` for good. Both now prefer `US` — a company that lands
+  goods in the United States on any of its filings is a US importer.
+* `search.ts` filters on `PACK_COUNTRY` inside `runCompanyQuery`, which is the
+  single path public search, pack assembly and the buyer count all share. So
+  the rows a customer previews are the rows they are charged for and the rows
+  they receive. `tests/pack-country.test.ts` fails if a second query path to
+  `companies` ever appears.
+
+The rows stay in the database with their real country. A Canadian lane can be
+sold later off data already paid for.
 
 Cost of this segment: 7,592 company records is 113,880 credits, about $79 at
 Scale Pack rates, plus the one-off $499 setup. A 200-company pack is 3,000

@@ -10,12 +10,35 @@ import { collectPaged, countPaged } from '@/lib/paging'
 export { normalizeHs4, MAX_SEARCH_LIMIT, MAX_PACK_RECORDS }
 
 
+/**
+ * The country every pack is sold as, and the only one search returns.
+ *
+ * The vendor's `country_imp` says US on shipments unladen in Brampton,
+ * Ontario — the feed is US-facing, not a statement about where the buyer sits.
+ * Gap (Canada) Inc, Old Navy (Canada) Inc, PVH Canada, SML Canada Acquisition
+ * and American Eagle Outfitters Canada all arrived that way on real HS 620442
+ * records. They are genuine buyers of Indian apparel and they are not American,
+ * and every page on this site says US importers.
+ *
+ * The rows stay in the database with their real country, so a Canadian lane can
+ * be sold later off data already paid for. They are filtered here, once, on the
+ * only path that reads companies — public search, pack assembly and the buyer
+ * count all go through runCompanyQuery, so the rows a customer previews are the
+ * rows they are charged for and the rows they receive.
+ */
+export const PACK_COUNTRY = 'US'
+
 export interface SearchFilters {
   keyword?: string | null
   /** One or many HS4 headings. More headings, more buyers — and a bigger sale. */
   hs4?: string[] | string | null
   port?: string | null
   state?: string | null
+  /**
+   * Overrides PACK_COUNTRY. Nothing in the storefront sets it; it exists so a
+   * second lane can be assembled without editing this file.
+   */
+  country?: string | null
 }
 
 export interface SearchOptions extends SearchFilters {
@@ -158,6 +181,11 @@ function runCompanyQuery(
   let query = supabase.from('companies').select(columns, {
     count: options.withCount ? 'estimated' : undefined,
   })
+
+  // Country is normalised to an ISO code by scripts/company_cleaning.py before
+  // it is ever written, so this is an equality test and not a list of
+  // spellings that has to stay in step with the vendor's.
+  query = query.eq('country', (options.country ?? PACK_COUNTRY).trim().toUpperCase())
 
   const hs4Codes = parseHs4List(options.hs4)
   if (hs4Codes.length === 1) {

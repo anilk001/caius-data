@@ -42,6 +42,7 @@ from hs4_classifier import MIN_CONFIDENCE, classify_hs4  # noqa: E402
 from company_cleaning import (  # noqa: E402
     looks_like_logistics,
     clean_company_name,
+    clean_country,
     clean_hs4,
     clean_state,
     clean_text,
@@ -528,8 +529,11 @@ def main() -> int:
                 elif not city and not state:
                     stats.address_unparseable += 1
             # Tier 1 is a US importer dataset; absent an explicit importer
-            # country column, US is the correct default.
-            country = clean_text(cell(row, "country"), 60) or "US"
+            # country column, US is the correct default. Normalised to an ISO
+            # code on the way in, because packs are filtered on this column and
+            # an unrecognised spelling of "United States" would drop real
+            # buyers out of every pack without saying so.
+            country = clean_country(cell(row, "country")) or "US"
             port_unlading = clean_text(cell(row, "port_of_unlading"), 120)
             arrival = parse_date(cell(row, "arrival_date"))
 

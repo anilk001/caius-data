@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from company_cleaning import (
     clean_company_name,
+    clean_country,
     looks_like_logistics,
     looks_like_consolidator,
     clean_hs4,
@@ -181,6 +182,25 @@ check("tripled name folds", clean_company_name("GAP INC GAP INC GAP INC"), "Gap 
 check("a short repeat is left alone", clean_company_name("HO HO"), "Ho Ho")
 check("a name that merely starts alike is left alone",
       clean_company_name("SAKS FIFTH AVENUE SAKS INC"), "Saks Fifth Avenue Saks Inc")
+
+# --- Countries --------------------------------------------------------------
+# Packs are filtered on this column with an equality test, so every spelling of
+# the United States a filer might use has to land on "US". One that does not
+# drops a real buyer out of every pack, silently.
+for spelling in ["US", "usa", "USA", "United States", "U.S.A.",
+                 "united states of america", "U S A", "America"]:
+    check(f"country: {spelling}", clean_country(spelling), "US")
+
+check("canada", clean_country("Canada"), "CA")
+check("canada by code", clean_country("ca"), "CA")
+check("mexico", clean_country("MEXICO"), "MX")
+check("india", clean_country("India"), "IN")
+check("a placeholder is no country", clean_country("n/a"), None)
+check("empty", clean_country(""), None)
+check("none", clean_country(None), None)
+# Not guessed at. A wrong guess relabels a buyer's nationality, which is the
+# one claim the front page makes.
+check("an unknown country is handed back", clean_country("Freedonia"), "Freedonia")
 
 # --- States ----------------------------------------------------------------
 check("full name", clean_state("California"), "CA")
