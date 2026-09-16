@@ -312,6 +312,32 @@ HS code lifetime, and $299/month for a 1-seat "lead building" plan.
 
 ## Loading real data
 
+**Live now: 5 companies, 6 shipments, HS 6204, India → US.** The first real
+records went into Supabase on 16 September. JP Boden Services (2 shipments),
+Coach Services, Sugartown Worldwide (Lilly Pulitzer) and Wear Pact — whose
+filing reads "WEAR PACT, LLC C/O FLEXPORT" and correctly reduces to the buyer,
+not the forwarder. American Eagle Outfitters Canada is the fifth: stored,
+labelled `CA`, and absent from a US search. That is the whole Canada decision
+working end to end on production data.
+
+The catalogue is far short of the 50-company minimum, so checkout will
+correctly refuse to sell anything yet. The next pull is what fixes that, and it
+needs the vendor API.
+
+**The API cannot be reached from the Claude Code environment.** `api.billof​la​ding​data.com`
+is denied at the egress proxy by network policy, so the fetch step has to run
+somewhere that can reach it. Either allow the host on the environment's network
+policy, or run `bold_api.py records` elsewhere and bring the JSON back.
+
+**The service-role key is not reachable either** — Railway returns variable
+names without values to an OAuth client. `ingest_csv.py --emit-payload FILE`
+exists for exactly this: it writes the two RPC payloads the posting path would
+have sent, each shipment carrying the company key it belongs to, and they can
+be applied through any admin connection. That is how the rows above were
+loaded. The file is a snapshot — applying it twice adds its shipment counts
+twice, so check `shipments.source_row_hash` first if the target may already
+hold some of the rows.
+
 Three steps, all offline except the first:
 
     export BOLD_API_KEY=...

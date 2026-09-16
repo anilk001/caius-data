@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import os
 import sys
 from collections import Counter, defaultdict
@@ -326,6 +327,70 @@ def existing_hashes(client: Client, hashes: list[str]) -> set[str]:
 # --------------------------------------------------------------------------
 
 
+def company_db_key(payload: dict[str, object]) -> str:
+    """
+    Rebuild the key `ingest_companies` returns for a payload.
+
+    Our grouping key is not the database's: ours also strips legal suffixes, so
+    "Acme Imports Inc" and "Acme Imports LLC" group together here and are two
+    rows there. Matching the RPC's answer back to our aggregates means speaking
+    its key, and it is generated from these four fields.
+    """
+    return "|".join(
+        (
+            str(payload["name"]).strip().lower(),
+            str(payload["city"] or "").strip().lower(),
+            str(payload["state"] or "").strip().lower(),
+            str(payload["hs4_code"]).strip(),
+        )
+    )
+
+
+def emit_payload(
+    path: Path,
+    aggregates: dict,
+    shipments: list[dict[str, object]],
+    shipment_keys: list[str],
+    stats: "Stats",
+) -> int:
+    """
+    Write what would have been posted, for applying elsewhere.
+
+    The service-role key is not on every machine that can parse a manifest, and
+    it should not have to be. This writes the two RPC payloads exactly as the
+    posting path builds them, with each shipment carrying the company key it
+    belongs to so the ids can be resolved wherever it is applied.
+    """
+    companies = []
+    for key, aggregate in aggregates.items():
+        payload = aggregate.to_payload()
+        companies.append({**payload, "_key": key, "_db_key": company_db_key(payload)})
+
+    by_key = {c["_key"]: c["_db_key"] for c in companies}
+    resolved = [
+        {**shipment, "_company_db_key": by_key[key]}
+        for shipment, key in zip(shipments, shipment_keys)
+        if key in by_key
+    ]
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"companies": companies, "shipments": resolved}, indent=1),
+        encoding="utf-8",
+    )
+
+    stats.companies = len(companies)
+    print(f"Wrote {path} — {len(companies):,} companies, {len(resolved):,} shipments.")
+    print(
+        "Nothing was written to Supabase. This file is a snapshot: applying it\n"
+        "twice adds its shipment counts twice, so check shipments.source_row_hash\n"
+        "first if the target may already hold some of these rows."
+    )
+    print(stats.report())
+    _preview(aggregates)
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Ingest a US importer manifest CSV into Supabase.",
@@ -375,6 +440,18 @@ def main() -> int:
         "--dry-run",
         action="store_true",
         help="Parse and summarise without writing to Supabase",
+    )
+    parser.add_argument(
+        "--emit-payload",
+        type=Path,
+        metavar="FILE",
+        help=(
+            "Write the exact RPC payloads to a JSON file instead of posting "
+            "them, for applying through a connection this machine does not "
+            "hold the service-role key for. The file is a snapshot: applying "
+            "it twice adds its shipment counts twice, so check "
+            "shipments.source_row_hash before a second run."
+        ),
     )
     parser.add_argument(
         "--force",
@@ -614,6 +691,9 @@ def main() -> int:
         _preview(aggregates)
         return 0
 
+    if args.emit_payload:
+        return emit_payload(args.emit_payload, aggregates, shipments, shipment_keys, stats)
+
     client = get_client()
 
     # --- Skip rows already ingested ---------------------------------------
@@ -670,15 +750,7 @@ def main() -> int:
         # fields instead, rebuilding the DB key from what we sent.
         returned = {row["company_key"]: row["id"] for row in (response.data or [])}
         for our_key, payload in batch:
-            db_key = "|".join(
-                (
-                    str(payload["name"]).strip().lower(),
-                    (payload["city"] or "").strip().lower(),  # type: ignore[union-attr]
-                    (payload["state"] or "").strip().lower(),  # type: ignore[union-attr]
-                    str(payload["hs4_code"]).strip(),
-                )
-            )
-            company_id = returned.get(db_key)
+            company_id = returned.get(company_db_key(payload))
             if company_id:
                 key_to_id[our_key] = company_id
 
