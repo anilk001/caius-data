@@ -254,6 +254,36 @@ HS code lifetime, and $299/month for a 1-seat "lead building" plan.
 
 ---
 
+## Loading real data
+
+Three steps, all offline except the first:
+
+    export BOLD_API_KEY=...
+    python3 scripts/bold_api.py records --hs 6204 \
+        --import-country US --export-country IN \
+        --max-records 1000 --out data/6204-in.json
+
+    python3 scripts/bold_shipments.py data/6204-in.json --out data/6204-in.csv
+    python3 scripts/ingest_csv.py data/6204-in.csv --hs4 6204 --dry-run
+    python3 scripts/ingest_csv.py data/6204-in.csv --hs4 6204
+
+`bold_shipments.py` maps their response onto the column names `ingest_csv.py`
+already recognises rather than being a second ingest. Everything expensive to
+get right — name cleaning, HS4 classification from goods text, address parsing,
+weight-unit conversion, row fingerprinting so a re-run inserts nothing twice —
+already exists there and is tested. A parallel JSON ingest would be a second
+copy of all of it, and the second copy is the one that drifts.
+
+It reads both response shapes. The global API and the USA country-specific API
+name the same things differently (`start_port` vs `start_port_name`, `bydate`
+vs `estimated_arrival_date`), and only the USA one carries `consignee_address`,
+which is where city and state come from.
+
+Proven end to end on 120 synthetic records in the documented shapes: 120 rows
+converted, 17 forwarder rows dropped, 103 addresses parsed, 6 companies
+upserted. The first call spends credits; everything after it is local, and
+`--dry-run` shows what would be written before anything is.
+
 ## Before taking a real payment
 
 * Delete the `[TEST]` rows. `/search` claims "Every row is a real US company",
