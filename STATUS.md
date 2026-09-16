@@ -312,7 +312,34 @@ HS code lifetime, and $299/month for a 1-seat "lead building" plan.
 
 ## Loading real data
 
-**Live now: 5 companies, 6 shipments, HS 6204, India → US.** The first real
+**Free trial credits: spent, 500 records.** Two pulls of 250 on HS 620442 and
+620443, US ← IN, on 16 September. The third call returned HTTP 402, so the
+trial was 500 records rather than the 1,000 the brochure implies — worth
+knowing before budgeting a paid pack.
+
+Those 500 records become **463 shipment rows and 113 companies**: 25 rows had no
+company in the consignee field, 59 were freight forwarders, 17 landed outside
+the US. 108 of the 113 are US and sellable; 5 are Canadian arms and are stored
+but filtered out.
+
+The buyer list is the real thing — Urban Outfitters, Old Navy, JP Boden,
+Walmart, Gap, PVH, Coach, Macy's, Target, All Saints, Kate Quinn Organics, Hill
+House Home, Sherri Hill, Sugartown (Lilly Pulitzer), Janie and Jack, The
+Vermont Country Store.
+
+Three defects only real data could have shown, all fixed and tested:
+
+* The duplicate fold was deleting a quarter of the shipments. A bill of lading
+  is 38% filled; records without one differ only in value and quantity, which
+  the CSV was not carrying. See `fold_key`.
+* `looks_like_consolidator` was never running on this path at all — only
+  `bold_company_records` called it. It now runs after aggregation, where a
+  company's whole trade profile exists.
+* "SHIPMONK C/O SOFT SURROUNDINGS" puts the fulfilment warehouse first and the
+  buyer second, the opposite of "WEAR PACT, LLC C/O FLEXPORT". Cutting at C/O
+  unconditionally was selling the warehouse and discarding the brand.
+
+**Earlier: 5 companies, 6 shipments, HS 6204, India → US.** The first real
 records went into Supabase on 16 September. JP Boden Services (2 shipments),
 Coach Services, Sugartown Worldwide (Lilly Pulitzer) and Wear Pact — whose
 filing reads "WEAR PACT, LLC C/O FLEXPORT" and correctly reduces to the buyer,
@@ -320,14 +347,11 @@ not the forwarder. American Eagle Outfitters Canada is the fifth: stored,
 labelled `CA`, and absent from a US search. That is the whole Canada decision
 working end to end on production data.
 
-The catalogue is far short of the 50-company minimum, so checkout will
-correctly refuse to sell anything yet. The next pull is what fixes that, and it
-needs the vendor API.
+That first load proved the write path and is superseded by the 500-record pull,
+which contains every one of its rows.
 
-**The API cannot be reached from the Claude Code environment.** `api.billof​la​ding​data.com`
-is denied at the egress proxy by network policy, so the fetch step has to run
-somewhere that can reach it. Either allow the host on the environment's network
-policy, or run `bold_api.py records` elsewhere and bring the JSON back.
+**The API host is `tradedata.billofladingdata.com`**, not `api.` — the
+environment's network policy needs that name, or `*.billofladingdata.com`.
 
 **The service-role key is not reachable either** — Railway returns variable
 names without values to an OAuth client. `ingest_csv.py --emit-payload FILE`
