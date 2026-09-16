@@ -218,3 +218,14 @@ stays green locally, because a local `npm ci` installs everything.
 To reproduce a Railway build before pushing:
 
     npm ci --omit=dev && npm run build && npm ci
+
+The Railway build command is `npm install && npm run build`, not just
+`npm run build`. Railway caches the `npm ci` layer, and that cache survived the
+move of Tailwind and TypeScript out of devDependencies — so the image kept a
+`node_modules` built before the fix and the deploy kept failing on a package
+that was, by then, a plain dependency. `npm install` reconciles what is there
+against `package.json` and adds whatever is missing.
+
+It is deliberately `npm install` and not `npm ci`: `npm ci` deletes
+`node_modules` first, and Railway mounts a build cache inside it at
+`node_modules/.cache`, so the delete fails with `EBUSY`.
