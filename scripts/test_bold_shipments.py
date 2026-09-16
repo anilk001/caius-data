@@ -18,7 +18,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from bold_shipments import COLUMNS, collapse_repeats, convert, iso_date, to_row
+from bold_shipments import (
+    COLUMNS,
+    collapse_repeats,
+    convert,
+    destination_country,
+    flagged_as_shipping,
+    iso_date,
+    to_row,
+)
 
 failures: list[str] = []
 
@@ -174,6 +182,36 @@ check("empty stays empty", collapse_repeats(""), "")
 folded = to_row(dict(GLOBAL, products="WOMENS LINEN WOVEN SKIRT HTS: 62044290" * 6))
 check("the converter folds on the way through",
       folded["Product Description"], "WOMENS LINEN WOVEN SKIRT HTS: 62044290")
+
+# --- The vendor's own logistics flag ----------------------------------------
+# Free, on every record, and independent of the name — which is all
+# looks_like_logistics has to work with.
+check("flag set as a number", flagged_as_shipping({"is_shipping": 1}), True)
+check("flag set as a string", flagged_as_shipping({"is_shipping": "1"}), True)
+check("flag clear", flagged_as_shipping({"is_shipping": 0}), False)
+check("flag absent", flagged_as_shipping({}), False)
+
+flagged = dict(GLOBAL, is_shipping=1, consignee_name="SOME FORWARDER LLC")
+rows, skipped = convert([flagged])
+check("a flagged consignee is not a row", rows, [])
+check("and the drop is counted",
+      skipped["vendor flagged the consignee as a shipping company"], 1)
+
+# --- Unlading port decides the country --------------------------------------
+# `country_imp` says US on records unladen in Brampton, Ontario. Gap (Canada)
+# Inc is a real buyer but not a US importer, and a US pack that contains it is
+# wrong in the way a customer notices first.
+check("brampton is canada", destination_country("BRAMPTON"), "CA")
+check("port names with punctuation still match",
+      destination_country("Montreal, QC"), "CA")
+check("manzanillo is mexico", destination_country("MANZANILLO"), "MX")
+check("a us port settles nothing here", destination_country("NEW YORK"), None)
+check("no port, no answer", destination_country(""), None)
+
+canadian = to_row(dict(GLOBAL, consignee_name="GAP (CANADA) INC",
+                       end_port="BRAMPTON", country_imp="US"))
+check("the port overrides the feed's country",
+      canadian["Consignee Country"], "CA")
 
 if failures:
     print(f"\n{len(failures)} failure(s):\n")

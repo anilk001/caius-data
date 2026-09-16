@@ -69,6 +69,46 @@ COLUMNS = list(FIELD_MAP)
 
 ABSENT = {"", "-", "--", "n/a", "null", "none"}
 
+# The vendor flags logistics companies themselves, on every record, at no extra
+# cost. It is a second opinion independent of the name, which is the only thing
+# company_cleaning.looks_like_logistics has to go on — so a forwarder with a
+# name that gives nothing away ("Intoglo Technologies Inc") can still be caught.
+SHIPPING_FLAG = "is_shipping"
+
+
+def flagged_as_shipping(record: dict) -> bool:
+    raw = record.get(SHIPPING_FLAG)
+    if raw is None:
+        return False
+    text = str(raw).strip().lower()
+    return text in {"1", "true", "yes", "y"}
+
+
+# `country_imp` says US on records whose goods are unladen in Canada: the feed
+# is US-facing, not a statement about where the buyer sits. A pack sold as "US
+# importers" that contains Gap (Canada) Inc is wrong in the way a customer
+# notices first, so the port decides the country and the caller can filter.
+#
+# Only unambiguous port names are listed. "Richmond", "Windsor" and "Delta"
+# are all US cities too, and guessing wrong on those would relabel real US
+# buyers as foreign.
+NON_US_PORTS = {
+    "BRAMPTON": "CA", "TORONTO": "CA", "MISSISSAUGA": "CA", "MONTREAL": "CA",
+    "MONTREAL QC": "CA", "VANCOUVER BC": "CA", "PRINCE RUPERT": "CA",
+    "HALIFAX": "CA", "CALGARY": "CA", "EDMONTON": "CA", "WINNIPEG": "CA",
+    "SAINT JOHN NB": "CA", "QUEBEC": "CA", "OTTAWA": "CA",
+    "MANZANILLO": "MX", "VERACRUZ": "MX", "LAZARO CARDENAS": "MX",
+    "ALTAMIRA": "MX", "MONTERREY": "MX", "GUADALAJARA": "MX",
+}
+
+
+def destination_country(port: str) -> str | None:
+    """The country a port of unlading sits in, when the name settles it."""
+    if not port:
+        return None
+    key = "".join(ch for ch in port.upper() if ch.isalnum() or ch == " ")
+    return NON_US_PORTS.get(" ".join(key.split()))
+
 
 def _value(record: dict, keys: tuple[str, ...]) -> str:
     for key in keys:
@@ -134,6 +174,10 @@ def to_row(record: dict) -> dict[str, str] | None:
     if not row["Consignee Name"]:
         return None
 
+    elsewhere = destination_country(row["Port of Unlading"])
+    if elsewhere:
+        row["Consignee Country"] = elsewhere
+
     row["Arrival Date"] = iso_date(row["Arrival Date"])
     # Filer-typed goods text sometimes carries a contact. A column allowlist
     # cannot help when the address is inside a column we want.
@@ -153,6 +197,10 @@ def convert(records, keep_type: str | None = None) -> tuple[list[dict], Counter]
             continue
         if keep_type and str(record.get("type", "")).lower() != keep_type:
             skipped[f"not type={keep_type}"] += 1
+            continue
+
+        if flagged_as_shipping(record):
+            skipped["vendor flagged the consignee as a shipping company"] += 1
             continue
 
         row = to_row(record)
@@ -188,6 +236,16 @@ def report(rows: list[dict]) -> None:
     buyers = {r["Consignee Name"].strip().lower() for r in rows}
     print(f"\n{len(rows)} shipment rows, {len(buyers)} distinct consignee names")
     print("(the real company count comes after ingest_csv merges name variants)")
+
+    foreign = Counter(
+        r["Consignee Country"] for r in rows
+        if r["Consignee Country"] and r["Consignee Country"].upper() not in {"US", "USA", "UNITED STATES"}
+    )
+    if foreign:
+        total = sum(foreign.values())
+        detail = ", ".join(f"{c} {n}" for c, n in foreign.most_common())
+        print(f"\n{total} row(s) unladen outside the US ({detail}).")
+        print("These are not US importers. Decide before they go in a US pack.")
 
 
 def main() -> int:

@@ -109,6 +109,17 @@ for name in [
     "EXPEDITORS INTERNATIONAL",
     "SHANGHAI ZEHONG INTERNATIONAL LOGISTICS CO., LTD",
     "KUEHNE NAGEL LOGISTICS",
+    # Every name below reached the KEPT list on real HS 620442 records and
+    # would have been sold to an Indian exporter as a buyer of their goods.
+    "PEGASUS MARITIME, INC",
+    "SWIFT CARGO INC",
+    "OLYMPIAD LINE LLC",
+    "OLYMPIAD LINE, LLC",
+    "AJ WORLDWIDE SERVICES INC",
+    "INTOGLO TECHNOLOGIES INC",
+    "INTERNATIONAL WAREHOUSE GROUP",
+    "SMARTMODE INTERNATIONAL LOGISTICS",
+    "DSV AIR & SEA INC.",
 ]:
     check(f"logistics: {name[:28]}", looks_like_logistics(name), True)
 
@@ -121,11 +132,55 @@ for name in [
     "ALL SAINTS USA LTD.",
     "SPICE KING USA CORP",
     "ACME APPAREL LOGISTICS",
+    # The real buyers the widened markers must not touch. "Kate Quinn
+    # Organics Inc Warehouse" is the buyer's own warehouse, not a 3PL, and
+    # "Sugartown Worldwide" is Lilly Pulitzer.
+    "KATE QUINN ORGANICS INC WAREHOUSE",
+    "SUGARTOWN WORLDWIDE LLC",
+    "VINEYARD VINES LLC",
+    "HILL HOUSE HOME LLC",
+    "PVH CORP",
+    "J CREW GROUP INC",
+    "NORDSTROM INC",
+    "H&M HENNES & MAURITZ LP",
 ]:
     check(f"buyer: {name[:32]}", looks_like_logistics(name), False)
 
 check("empty name is not logistics", looks_like_logistics(""), False)
 check("none is not logistics", looks_like_logistics(None), False)
+
+# --- Names that are not companies -------------------------------------------
+# "ATTN : KRISTIN SHEELER" is a person and "INDIVIDUAL (I9NBD221612934)" is a
+# customs reference. Both arrived in the consignee field of real records.
+check("a person is not a company", clean_company_name("ATTN : KRISTIN SHEELER"), None)
+check("attn after a name is cut",
+      clean_company_name("ACME IMPORTS LLC ATTN: J SMITH"), "Acme Imports LLC")
+check("an individual is not a company",
+      clean_company_name("INDIVIDUAL (I9NBD221612934)"), None)
+check("a job title is not a company", clean_company_name("BOUTIQUE MANAGER"), None)
+check("the buyer's own warehouse is the buyer",
+      clean_company_name("KATE QUINN ORGANICS INC WAREHOUSE"),
+      "Kate Quinn Organics Inc")
+check("a warehouse on its own is nobody", clean_company_name("WAREHOUSE"), None)
+
+# --- Casing defects real names exposed --------------------------------------
+check("by is a word, not an acronym",
+      clean_company_name("WEST BY CPW LLC"), "West by CPW LLC")
+check("byrd is a surname, not an acronym",
+      clean_company_name("LIZA BYRD BOUTIQUE"), "Liza Byrd Boutique")
+check("an ampersand joins words like a hyphen",
+      clean_company_name("H&M HENNES&MAURITZ L.P.1600"),
+      "H&M Hennes&Mauritz L.P.1600")
+check("initials keep their capitals with a suite glued on",
+      clean_company_name("ACME L.P.1600"), "Acme L.P.1600")
+
+# --- A name the filer typed twice -------------------------------------------
+check("doubled name folds",
+      clean_company_name("OLD NAVY, LLC OLD NAVY, LLC"), "Old Navy, LLC")
+check("tripled name folds", clean_company_name("GAP INC GAP INC GAP INC"), "Gap Inc")
+check("a short repeat is left alone", clean_company_name("HO HO"), "Ho Ho")
+check("a name that merely starts alike is left alone",
+      clean_company_name("SAKS FIFTH AVENUE SAKS INC"), "Saks Fifth Avenue Saks Inc")
 
 # --- States ----------------------------------------------------------------
 check("full name", clean_state("California"), "CA")

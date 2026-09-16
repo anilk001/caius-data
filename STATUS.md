@@ -243,6 +243,34 @@ slash, leaving Danish "A/S" suffixes alone, and `merge_rows()` sums the totals
 and unions the origin countries — two filings of one company are two parts of
 its trade, not two estimates of it.
 
+**What 250 real records showed.** The first large live response (HS 620442,
+US←IN, 250 of 26,740) carried 75 distinct consignee names. The name filter as
+it stood dropped 4 of them. Eleven more should have gone:
+
+* Forwarders the markers missed — Pegasus Maritime, Swift Cargo, Olympiad Line
+  LLC, AJ Worldwide Services, Intoglo Technologies, International Warehouse
+  Group. `maritime`, bare `cargo`, `worldwide services`, `warehouse group` and
+  `line llc` are now markers, punctuation is stripped before matching so
+  "Olympiad Line, LLC" reads the same as "Olympiad Line LLC", and Intoglo —
+  whose name gives nothing away — is in `_KNOWN_LOGISTICS`.
+* Not companies at all — "ATTN : KRISTIN SHEELER" (a person),
+  "INDIVIDUAL (I9NBD221612934)" (a customs reference), "BOUTIQUE MANAGER" (a
+  job title). Cut as noise or rejected as placeholders.
+
+The vendor ships an `is_shipping` flag on every record, free, and
+`bold_shipments.py` now honours it. It is a second opinion independent of the
+name, which is all `looks_like_logistics` has to go on.
+
+**Canadian consignees in a US pack — a product decision, not a bug.** Five of
+the 75 were Gap (Canada) Inc, Old Navy (Canada) Inc, PVH Canada, SML Canada
+Acquisition and American Eagle Outfitters Canada. `country_imp` says US on all
+of them; `end_port` says BRAMPTON, which is Ontario. The feed is US-facing, not
+a statement about where the buyer sits. `bold_shipments.py` now lets an
+unambiguous port of unlading override the country and prints a count of rows
+unladen outside the US, so the rows are labelled rather than silently sold as
+US importers. Whether a "US buyers" pack should carry them at all is still
+open — they are genuine buyers of Indian apparel, just not American ones.
+
 Cost of this segment: 7,592 company records is 113,880 credits, about $79 at
 Scale Pack rates, plus the one-off $499 setup. A 200-company pack is 3,000
 credits, about $2.07.

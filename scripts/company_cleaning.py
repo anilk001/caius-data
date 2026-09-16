@@ -38,11 +38,26 @@ _NOISE_PATTERNS = (
     r"\bsame as consignee\b.*$",
     r"\bnot available\b.*$",
     r"\bunknown\b.*$",
+    # "ATTN : KRISTIN SHEELER" is a person, not a company. Cutting from "attn"
+    # leaves nothing, and nothing is the right answer: we sell companies.
+    r"\battn\b\s*[:.\-]?.*$",
+    r"^\s*individual\b.*$",
+    # "KATE QUINN ORGANICS INC WAREHOUSE" is the buyer's own warehouse, so the
+    # word is trailing noise. "INTERNATIONAL WAREHOUSE GROUP" is a 3PL and is
+    # caught by looks_like_logistics instead, which is why only a trailing
+    # "warehouse" is cut here.
+    r"\s+warehouse\s*(?:#\s*)?\d*$",
 )
 
 _PLACEHOLDER_NAMES = {
     "", "n/a", "na", "none", "unknown", "to order", "to the order of",
     "same as consignee", "consignee", "not available", "notify party",
+    # Job titles and catch-alls filers type when they have no company to name.
+    # All of these arrived on real HS 620442 records.
+    "individual", "boutique manager", "store manager", "manager", "owner",
+    "customer", "walk in customer", "cash customer", "warehouse",
+    "to be advised", "tba", "various", "misc", "miscellaneous",
+    "personal effects", "sample", "samples", "no name", "test",
 }
 
 # "PVT.LTD." and "URBAN OUTFITTERS,INC" are each one token to a title-caser,
@@ -53,6 +68,10 @@ _PLACEHOLDER_NAMES = {
 # A domain in the name is not a glued suffix: "CBAZAAR.COM" must not open up
 # into "Cbazaar. Com". Real buyers file under their web address often enough
 # that this is worth an exception rather than a shrug.
+# Punctuation is noise when matching a name against a marker list: a comma
+# before a legal suffix is a filer's habit, not a difference in the company.
+_MATCH_PUNCT = re.compile(r"[.,;:()\[\]/\\'\"]+")
+
 _TLDS = "com|net|org|io|biz|info|shop|store"
 _GLUED_SUFFIX = re.compile(
     rf"(?<=[A-Za-z])([.,])(?!(?:{_TLDS})\b)(?=[A-Za-z]{{2,}})",
@@ -69,7 +88,9 @@ _TRAILING_OPEN = re.compile(r"\s*\(\s*$")
 
 # Dotted initials: U.S.A., J.P., A.B.C. A plain title-caser lower-cases
 # everything after the first letter and yields "U.s.a.".
-_DOTTED_INITIALS = re.compile(r"^(?:[A-Za-z]\.){2,}[A-Za-z]?\.?$")
+# "L.P." and also "L.P.1600", where a suite number has been glued on by the
+# filer. Either way the letters are initials and belong in capitals.
+_DOTTED_INITIALS = re.compile(r"^(?:[A-Za-z]\.){2,}(?:[A-Za-z]\.?|\d+)?$")
 
 # "AZAZIE SG PTE. LTD/ AZAZIE INC." is one buyer filed under two names, and the
 # vendor's own aggregation bills for it twice. The left side is the contracting
@@ -89,12 +110,43 @@ _DATE_FORMATS = (
 )
 
 
+# A name short enough that an accidental fold would be wrong. "HO HO" tiles as
+# "HO"; "OLD NAVY, LLC OLD NAVY, LLC" does not fold by accident.
+MIN_REPEATED_UNIT = 6
+
+
+def collapse_doubled(name: str) -> str:
+    """
+    Fold a name the filer typed twice.
+
+    Real records carry "OLD NAVY, LLC OLD NAVY, LLC" — one company, keyed in
+    once for the consignee and once for the notify party and concatenated on
+    the way out. Only exact tiling is folded, and only of a unit long enough
+    that the repetition cannot be a coincidence.
+    """
+    # The copies are separated by one space and the last has none, so a name
+    # made of k copies of a unit of length n (the unit carrying its separator)
+    # is k * n - 1 characters long.
+    length = len(name) + 1
+    for size in range(MIN_REPEATED_UNIT, length // 2 + 1):
+        if length % size:
+            continue
+        unit = name[:size]
+        if not unit.endswith(" "):
+            continue
+        copies = length // size
+        if unit * (copies - 1) + unit[:-1] == name:
+            return unit[:-1]
+    return name
+
+
 def clean_company_name(raw: str | None) -> str | None:
     """Return a display-ready company name, or None if the value is junk."""
     if not raw:
         return None
 
     name = _WS.sub(" ", _GLUED_SUFFIX.sub(r"\1 ", str(raw))).strip()
+    name = collapse_doubled(name)
     if name.lower() in _PLACEHOLDER_NAMES:
         return None
 
@@ -135,10 +187,11 @@ _FIXED_CASE = {
     "inc": "Inc", "ltd": "Ltd", "corp": "Corp", "co": "Co", "intl": "Intl",
     "pvt": "Pvt", "pte": "Pte", "private": "Private",
     "and": "and", "of": "of", "the": "the", "for": "for", "de": "de",
+    "by": "by",
 }
 
 # Kept lowercase unless they lead the name.
-_MINOR_WORDS = {"and", "of", "the", "for", "de", "a", "an"}
+_MINOR_WORDS = {"and", "of", "the", "for", "de", "a", "an", "by"}
 
 
 def _title_case(name: str) -> str:
@@ -165,10 +218,19 @@ def _title_case(name: str) -> str:
             continue
 
         # "WAL-MART" is two words to a reader and one token to a title-caser,
-        # which renders it "Wal-mart".
-        words.append("-".join(_capitalise(part) for part in word.split("-")))
+        # which renders it "Wal-mart". An ampersand joins words the same way:
+        # "H&M HENNES&MAURITZ" is "H&m Hennes&mauritz" without this.
+        words.append(_split_capitalise(word))
 
     return " ".join(words)
+
+
+def _split_capitalise(word: str) -> str:
+    """Capitalise each part of a token joined by a hyphen or an ampersand."""
+    return "-".join(
+        "&".join(_capitalise(piece) for piece in part.split("&"))
+        for part in word.split("-")
+    )
 
 
 def _capitalise(word: str) -> str:
@@ -187,7 +249,18 @@ def _capitalise(word: str) -> str:
     return lowered[:index] + lowered[index].upper() + lowered[index + 1 :]
 
 
+# Short vowel-free tokens are read as acronyms, which is right for NY, CPW and
+# PVH and wrong for these. "WEST BY CPW LLC" came back as "West BY CPW LLC" and
+# "LIZA BYRD BOUTIQUE" as "Liza BYRD Boutique" until this list existed.
+_NOT_ACRONYMS = {
+    "by", "my", "byrd", "wynn", "lynn", "lynx", "myth", "gym", "dry", "fly",
+    "fry", "sky", "sly", "spy", "sty", "try", "why", "wry", "cry", "shy",
+}
+
+
 def _looks_like_acronym(word: str) -> bool:
+    if word in _NOT_ACRONYMS:
+        return False
     return not any(c in "aeiou" for c in word.lower())
 
 
@@ -330,14 +403,29 @@ def parse_weight_kg(raw: str | None, unit: str | None = None) -> float | None:
 # an Indian exporter as "a US buyer of your product" is the kind of error a
 # customer spots on the first row, and it is the fastest way to a refund and a
 # bad review.
+#
+# Every marker below was put there by a name that reached the KEPT list on real
+# HS 620442 records and should not have: Pegasus Maritime, Swift Cargo,
+# Olympiad Line LLC, AJ Worldwide Services, International Warehouse Group.
+#
+# Matching happens against a copy of the name with full stops and commas turned
+# into spaces, so "Olympiad Line, LLC" and "Olympiad Line LLC" are the same
+# string to a marker.
 _LOGISTICS_MARKERS = (
     "container line", "container lines", "container shipping",
-    "shipping line", "steamship", "ocean line",
+    "shipping line", "steamship", "ocean line", "maritime",
     "freight", "forwarder", "forwarding", "logistics", "nvocc",
-    "customs broker", "customhouse", "customs house", "cargo services",
+    "customs broker", "customhouse", "customs house", "cargo",
     "transport services", "consolidator", "consolidation",
-    "supply chain solutions", "3pl", "warehousing",
+    "supply chain solutions", "3pl", "warehousing", "drayage",
     "express worldwide", "air cargo", "shipping agency", "shipping agencies",
+    "worldwide services", "fulfillment", "fulfilment",
+    "warehouse group", "warehouse services", "warehouse distribution",
+    "distribution services", "trucking", "haulage", "courier",
+    # A shipping line files as "<something> Line LLC". A buyer does not name
+    # itself that, and bare "line" is far too common in apparel to use alone.
+    "line llc", "line inc", "line ltd", "line corp",
+    "lines llc", "lines inc", "lines ltd",
 )
 
 # Names that are logistics-adjacent but often ARE the buyer, so they do not
@@ -356,6 +444,8 @@ _KNOWN_LOGISTICS = (
     "dhl global", "dhl supply", "maersk", "msc mediterranean", "cma cgm",
     "cosco", "evergreen line", "hapag", "ocean network express",
     "yang ming", "hmm ", "oocl", "zim integrated", "de well",
+    "intoglo", "crane worldwide", "rhenus", "hellmann", "dachser",
+    "dimerco", "shipco transport", "gxo ", "smartmode",
 )
 
 
@@ -426,7 +516,9 @@ def looks_like_logistics(name: str | None) -> bool:
     """
     if not name:
         return False
-    text = _WS.sub(" ", str(name).lower())
+    # "Olympiad Line, LLC" and "DSV Air & Sea, Inc." must read the same as the
+    # comma-free spellings, so punctuation becomes whitespace before matching.
+    text = _WS.sub(" ", _MATCH_PUNCT.sub(" ", str(name).lower())).strip()
 
     if any(known in text for known in _KNOWN_LOGISTICS):
         return True
