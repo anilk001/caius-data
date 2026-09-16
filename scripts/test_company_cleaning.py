@@ -165,6 +165,39 @@ check("the buyer's own warehouse is the buyer",
       "Kate Quinn Organics Inc")
 check("a warehouse on its own is nobody", clean_company_name("WAREHOUSE"), None)
 
+# --- C/O carries the buyer on either side ------------------------------------
+# The filer's order is not reliable, and getting it backwards sells a
+# fulfilment warehouse as a buyer of women's dresses.
+check("buyer leads", clean_company_name("WEAR PACT, LLC C/O FLEXPORT"), "Wear Pact, LLC")
+check("forwarder leads",
+      clean_company_name("SHIPMONK C/O SOFT SURROUNDINGS"), "Soft Surroundings")
+check("neither side is logistics, so the first still wins",
+      clean_company_name("OMIKA C/O DASH FULFILLMENT"), "Omika")
+
+# The four that reached a real pack preview before the markers covered them.
+for name in [
+    "3 PL WAREHOUSEING & DISTRIBUTION NJ",
+    "J&S SUPPLY CHAIN MANAGEMENT",
+    "BERGEN RECEIVING",
+    "SHIPMONK PENNSYLVANIA (PA2)",
+]:
+    check(f"logistics: {name[:30]}", looks_like_logistics(clean_company_name(name)), True)
+
+# --- A tail after the legal suffix -------------------------------------------
+check("a person after the suffix is not part of the name",
+      clean_company_name("RETAILVISOR LLC TERRY GRANT"), "Retailvisor LLC")
+check("a country after the suffix is not part of the name",
+      clean_company_name("WAL-MART STORES, INC. USA"), "Wal-Mart Stores, Inc")
+# "international", "group" and "holdings" are in _SUFFIXES but sit mid-name
+# constantly, so only incorporation words start a trim. Trimming on the wider
+# set truncated both of these, and hid a forwarder from the filter.
+check("a long tail is part of the name",
+      clean_company_name("LEVEL LLC INTERNATIONAL FOLK ART"),
+      "Level LLC International Folk Art")
+check("international is not a trim point",
+      clean_company_name("SMARTMODE INTERNATIONAL LOGISTICS L"),
+      "Smartmode International Logistics L")
+
 # --- Casing defects real names exposed --------------------------------------
 check("by is a word, not an acronym",
       clean_company_name("WEST BY CPW LLC"), "West by CPW LLC")
@@ -301,7 +334,7 @@ for raw, expected in [
     # A domain is not a glued legal suffix. This came out as "Cbazaar. Com".
     ("CBAZAAR.COM INC.", "Cbazaar.com Inc"),
     # A hyphen is a word break to a reader and one token to a title-caser.
-    ("WAL-MART STORES, INC. USA", "Wal-Mart Stores, Inc USA"),
+    ("WAL-MART STORES, INC. USA", "Wal-Mart Stores, Inc"),
     ("WAL-MART INC.", "Wal-Mart Inc"),
     # Filed with the bracket left open; the brand inside is how buyers know it.
     ("LAST BRAND INC (QUINCE", "Last Brand Inc (Quince)"),

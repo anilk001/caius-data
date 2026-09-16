@@ -150,6 +150,8 @@ def clean_company_name(raw: str | None) -> str | None:
     if name.lower() in _PLACEHOLDER_NAMES:
         return None
 
+    name = _resolve_care_of(name)
+
     # Drop trailing broker noise before anything else.
     lowered = name.lower()
     for pattern in _NOISE_PATTERNS:
@@ -175,8 +177,54 @@ def clean_company_name(raw: str | None) -> str | None:
     if name.isupper():
         name = _title_case(name)
 
+    name = _trim_after_suffix(name)
+
     name = name.strip(" ,.-")
     return name or None
+
+
+# A legal suffix normally ends a company name. When a word or two follows it,
+# that is usually the filer adding who to ask for or where to send it:
+# "RETAILVISOR LLC TERRY GRANT", "WAL-MART STORES, INC USA".
+MAX_WORDS_AFTER_SUFFIX = 2
+
+# Only the incorporation words, not the descriptive ones. `_SUFFIXES` also
+# holds "international", "group" and "holdings", which sit mid-name constantly:
+# trimming on those turned "LEVEL LLC INTERNATIONAL FOLK ART" into "Level LLC
+# International" and "SMARTMODE INTERNATIONAL LOGISTICS L" into "Smartmode
+# International" — half-names, and one of them hid a forwarder from the filter.
+_LEGAL_SUFFIXES = frozenset({
+    "co", "company", "corp", "corporation", "inc", "incorporated",
+    "l l c", "llc", "llp", "lp", "ltd", "limited", "plc", "pllc",
+    "private", "pte", "pvt",
+})
+
+
+def _trim_after_suffix(name: str) -> str:
+    """
+    Cut a short tail that follows a legal suffix.
+
+    Deliberately short-sighted. Two words is the limit because longer tails are
+    usually part of the name — "Level LLC International Folk Art" is one
+    company however oddly it is written, and truncating it would put a
+    half-name in front of a paying customer.
+    """
+    words = name.split(" ")
+    for index in range(len(words) - 1 - MAX_WORDS_AFTER_SUFFIX, len(words) - 1):
+        if index < 1:
+            continue
+        if words[index].strip(".,").lower() not in _LEGAL_SUFFIXES:
+            continue
+        tail = words[index + 1 :]
+        if any(word.strip(".,").lower() in _SUFFIXES for word in tail):
+            continue
+        # "LAST BRAND INC (QUINCE" is the buyer plus the brand it sells under,
+        # which is worth more to a customer than the legal name alone. Only a
+        # tail of plain words is filer noise.
+        if not all(re.fullmatch(r"[A-Za-z][A-Za-z.,'-]*", word) for word in tail):
+            continue
+        return " ".join(words[: index + 1])
+    return name
 
 
 # Tokens with a fixed presentation. Legal suffixes read as words, not shouts:
@@ -231,6 +279,35 @@ def _split_capitalise(word: str) -> str:
         "&".join(_capitalise(piece) for piece in part.split("&"))
         for part in word.split("-")
     )
+
+
+_CARE_OF = re.compile(r"\bc\s*/\s*o\b", re.IGNORECASE)
+
+
+def _resolve_care_of(name: str) -> str:
+    """
+    Pick the buyer out of a "X C/O Y" consignee, whichever side it is on.
+
+    The filer's order is not reliable. Both of these are real:
+
+        WEAR PACT, LLC C/O FLEXPORT      -> the buyer leads
+        SHIPMONK C/O SOFT SURROUNDINGS   -> the forwarder leads
+
+    Cutting at "C/O" unconditionally gets the first right and the second
+    exactly backwards, selling a fulfilment warehouse as a buyer of women's
+    dresses and losing the brand that actually bought them. So the sides are
+    judged rather than assumed, and only a clear swap — logistics on the left,
+    something else on the right — changes the answer.
+    """
+    match = _CARE_OF.search(name)
+    if not match:
+        return name
+
+    head = name[: match.start()].strip(" ,-")
+    tail = name[match.end() :].strip(" ,-")
+    if head and tail and looks_like_logistics(head) and not looks_like_logistics(tail):
+        return tail
+    return name
 
 
 def _capitalise(word: str) -> str:
@@ -420,6 +497,10 @@ _LOGISTICS_MARKERS = (
     "supply chain solutions", "3pl", "warehousing", "drayage",
     "express worldwide", "air cargo", "shipping agency", "shipping agencies",
     "worldwide services", "fulfillment", "fulfilment",
+    # All four reached a real pack preview: "3 PL Warehouseing & Distribution
+    # NJ" (the filer's spelling), "J&S Supply Chain Management", "Bergen
+    # Receiving", "Shipmonk".
+    "3 pl", "supply chain", "receiving", "warehouseing",
     "warehouse group", "warehouse services", "warehouse distribution",
     "distribution services", "trucking", "haulage", "courier",
     # A shipping line files as "<something> Line LLC". A buyer does not name
@@ -446,6 +527,10 @@ _KNOWN_LOGISTICS = (
     "yang ming", "hmm ", "oocl", "zim integrated", "de well",
     "intoglo", "crane worldwide", "rhenus", "hellmann", "dachser",
     "dimerco", "shipco transport", "gxo ", "smartmode",
+    # Not Stelcore. Its name gives nothing away — that is the whole reason
+    # looks_like_consolidator judges on ratios, and naming it here would hide
+    # the only test that proves the ratios still work.
+    "shipmonk", "dash fulfillment",
 )
 
 
