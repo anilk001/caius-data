@@ -3,13 +3,7 @@ import assert from 'node:assert/strict'
 
 import { buyerKey, mergeByBuyer, overFetch, type Buyer } from '../src/lib/buyers.ts'
 import { MAX_SEARCH_LIMIT } from '../src/lib/search-limits.ts'
-import {
-  PACKS,
-  proratedAmountCents,
-  isTooSmallToSell,
-  minCompaniesFor,
-  MIN_SALE_CENTS,
-} from '../src/lib/packs.ts'
+import { priceCents, MIN_RECORDS } from '../src/lib/pricing.ts'
 import type { CompanyRow } from '../src/types/database.ts'
 
 /**
@@ -179,70 +173,16 @@ describe('overFetch', () => {
   })
 })
 
-describe('pro-rata pricing for a short niche', () => {
-  const pack = { id: 'p', name: 'Starter', recordCount: 200, amountCents: 1900, blurb: '' }
-
-  it('charges full price when the niche is full', () => {
-    assert.equal(proratedAmountCents(pack, 200), 1900)
-    assert.equal(proratedAmountCents(pack, 500), 1900)
+describe('a short niche', () => {
+  it('is simply priced at what it holds', () => {
+    // The whole reason for per-company pricing: 120 companies is 120
+    // companies at their price, not a 200-pack sold short or refused.
+    assert.equal(priceCents(120), 900 + 70 * 15)
+    assert.ok(priceCents(120)! < priceCents(200)!)
   })
 
-  it('charges the fraction actually delivered', () => {
-    // 120 of 200 companies is 60% of the pack, so 60% of the price.
-    assert.equal(proratedAmountCents(pack, 120), 1140)
-    assert.equal(proratedAmountCents(pack, 100), 950)
-  })
-
-  it('rounds the buyer\u2019s way, never ours', () => {
-    // 1900 * 7 / 200 = 66.5 cents. Floored, not rounded up.
-    assert.equal(proratedAmountCents(pack, 7), 66)
-  })
-
-  it('never charges for a pack it cannot fill at all', () => {
-    assert.equal(proratedAmountCents(pack, 0), 0)
-    assert.equal(proratedAmountCents(pack, -5), 0)
-  })
-
-  it('refuses any sale under the $9 minimum', () => {
-    // $19 over 200 companies is 9.5c each, so $9 needs 95 of them.
-    assert.equal(minCompaniesFor(pack), 95)
-    assert.equal(isTooSmallToSell(pack, 94), true)
-    assert.equal(isTooSmallToSell(pack, 95), false)
-    assert.equal(isTooSmallToSell(pack, 200), false)
-    assert.ok(proratedAmountCents(pack, 94) < MIN_SALE_CENTS)
-    assert.ok(proratedAmountCents(pack, 95) >= MIN_SALE_CENTS)
-  })
-
-  it('never lets a floored price slip under the minimum', () => {
-    // minCompaniesFor ceilings precisely because proratedAmountCents floors.
-    for (const real of PACKS) {
-      const floor = minCompaniesFor(real)
-      assert.ok(
-        proratedAmountCents(real, floor) >= MIN_SALE_CENTS,
-        `${real.id}: ${floor} companies prices under the minimum`,
-      )
-      assert.equal(isTooSmallToSell(real, floor), false)
-      assert.equal(isTooSmallToSell(real, floor - 1), true)
-    }
-  })
-
-  it('keeps the minimum reachable inside every pack', () => {
-    // A pack whose full price is under the floor would be unsellable at any
-    // size. That is a pricing mistake, not a runtime condition.
-    for (const real of PACKS) {
-      assert.ok(
-        real.amountCents >= MIN_SALE_CENTS,
-        `${real.id} is priced below the minimum sale`,
-      )
-      assert.ok(minCompaniesFor(real) <= real.recordCount)
-    }
-  })
-
-  it('prices every real pack sanely at one company, then refuses it', () => {
-    for (const real of PACKS) {
-      const one = proratedAmountCents(real, 1)
-      assert.ok(one >= 0 && one < real.amountCents, `${real.id} priced oddly at 1`)
-      assert.equal(isTooSmallToSell(real, 1), true)
-    }
+  it('is refused only when it falls under the minimum', () => {
+    assert.equal(priceCents(MIN_RECORDS), 900)
+    assert.equal(priceCents(MIN_RECORDS - 1), null)
   })
 })

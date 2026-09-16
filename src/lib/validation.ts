@@ -1,7 +1,5 @@
 import { z } from 'zod'
-import { PACKS } from '@/lib/packs'
-
-const packIds = PACKS.map((p) => p.id) as [string, ...string[]]
+import { MIN_RECORDS } from '@/lib/pricing'
 
 /** Shared filter shape for search, sample CSV and checkout. */
 export const filtersSchema = z.object({
@@ -19,7 +17,10 @@ export const filtersSchema = z.object({
 export type Filters = z.infer<typeof filtersSchema>
 
 export const checkoutSchema = filtersSchema.extend({
-  packId: z.enum(packIds),
+  // How many companies the buyer asked for. The price is derived from this on
+  // the server and never sent by the browser — a client that could name its own
+  // price would name zero.
+  records: z.coerce.number().int().min(MIN_RECORDS).max(1_000_000),
   email: z.string().trim().email().max(200).optional().nullable(),
 })
 

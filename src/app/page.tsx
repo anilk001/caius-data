@@ -3,7 +3,7 @@ import { ArrowRight, FileDown, Search, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { TrustBanner } from '@/components/trust-banner'
-import { PACKS } from '@/lib/packs'
+import { BASE_CENTS, MIN_RECORDS, RATE_BANDS, priceCents } from '@/lib/pricing'
 import { HS_SUGGESTIONS, SECTORS } from '@/lib/hs-codes'
 import { formatUsd } from '@/lib/utils'
 
@@ -21,13 +21,11 @@ const STEPS = [
   {
     icon: Send,
     title: 'Buy the pack, get the file',
-    body: 'Pay once by card. The full CSV — street address, port of entry, date range — is emailed within a minute.',
+    body: 'Pay once by card for the companies you take. The full CSV — street address, port of entry, date range — is emailed within a minute.',
   },
 ]
 
 export default function HomePage() {
-  const cheapest = PACKS.reduce((a, b) => (a.amountCents <= b.amountCents ? a : b))
-
   return (
     <>
       {/* Hero ------------------------------------------------------------ */}
@@ -47,7 +45,7 @@ export default function HomePage() {
             code — company name, location, volume, port and product line.
             <span className="text-foreground font-medium">
               {' '}
-              Pay once from {formatUsd(cheapest.amountCents)}. No subscription.
+              Pay once, from {formatUsd(BASE_CENTS)}. No subscription.
             </span>
           </p>
 
@@ -123,38 +121,58 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="mt-10 grid gap-4 sm:grid-cols-3">
-            {PACKS.map((pack) => (
-              <div
-                key={pack.id}
-                className={`bg-card flex flex-col gap-4 rounded-xl border p-6 ${
-                  pack.highlight ? 'border-brand/40 shadow-sm' : ''
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium">{pack.name}</p>
-                  {pack.highlight && <Badge variant="brand">Most popular</Badge>}
+          <div className="bg-card mt-10 rounded-xl border p-6 sm:p-8">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span className="text-4xl font-semibold tracking-tight">
+                {formatUsd(BASE_CENTS)}
+              </span>
+              <span className="text-muted-foreground text-sm">
+                for the first {MIN_RECORDS} companies, then:
+              </span>
+            </div>
+
+            <dl className="mt-6 grid gap-x-8 gap-y-3 sm:grid-cols-3">
+              {RATE_BANDS.map((band, index) => {
+                const from = (index === 0 ? MIN_RECORDS : RATE_BANDS[index - 1].upTo!) + 1
+                return (
+                  <div
+                    key={band.cents}
+                    className="flex items-baseline justify-between gap-3 border-b pb-2"
+                  >
+                    <dt className="text-muted-foreground text-sm">
+                      {from.toLocaleString('en-US')}
+                      {band.upTo ? `–${band.upTo.toLocaleString('en-US')}` : ' and up'}
+                    </dt>
+                    <dd className="text-foreground text-sm font-medium">
+                      {band.cents}¢ each
+                    </dd>
+                  </div>
+                )
+              })}
+            </dl>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-4">
+              {[50, 200, 500, 2000].map((n) => (
+                <div key={n} className="bg-muted/40 rounded-lg px-4 py-3">
+                  <p className="text-lg font-semibold tracking-tight">
+                    {formatUsd(priceCents(n)!)}
+                  </p>
+                  <p className="text-muted-foreground text-xs">
+                    {n.toLocaleString('en-US')} companies
+                  </p>
                 </div>
+              ))}
+            </div>
 
-                <p className="flex items-baseline gap-1.5">
-                  <span className="text-4xl font-semibold tracking-tight">
-                    {formatUsd(pack.amountCents)}
-                  </span>
-                  <span className="text-muted-foreground text-sm">one time</span>
-                </p>
+            <p className="text-muted-foreground mt-6 text-sm leading-relaxed">
+              One row is one company — never the same buyer twice, never a
+              freight forwarder padding the count. If a niche holds fewer
+              companies than you asked for, you pay for the ones you get.
+            </p>
 
-                <p className="text-muted-foreground flex-1 text-sm leading-relaxed">
-                  <span className="text-foreground font-medium">
-                    {pack.recordCount} importer companies
-                  </span>
-                  . {pack.blurb}
-                </p>
-
-                <Button variant={pack.highlight ? 'brand' : 'outline'} asChild>
-                  <Link href="/search">Choose your HS code</Link>
-                </Button>
-              </div>
-            ))}
+            <Button variant="brand" className="mt-6" asChild>
+              <Link href="/search">Choose your HS code</Link>
+            </Button>
           </div>
 
           <p className="text-muted-foreground mt-6 text-sm">

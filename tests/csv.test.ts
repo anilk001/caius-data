@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { csvFilename, toCsv, withBom, type CsvColumn } from '../src/lib/csv.ts'
 import { normalizeHs4, isHs4 } from '../src/lib/hs4.ts'
 import { MAX_SEARCH_LIMIT } from '../src/lib/search-limits.ts'
-import { PACKS, getPack, MIN_SALE_CENTS } from '../src/lib/packs.ts'
+import { priceCents, MIN_RECORDS } from '../src/lib/pricing.ts'
 import { formatUsd } from '../src/lib/utils.ts'
 
 interface Row {
@@ -113,65 +113,25 @@ describe('normalizeHs4', () => {
   })
 })
 
-describe('packs', () => {
-  it('has unique ids', () => {
-    assert.equal(new Set(PACKS.map((p) => p.id)).size, PACKS.length)
+describe('pricing / query limits', () => {
+  // Buyers choose their own count now, so nothing stops one asking for 2,000
+  // companies on a lane that holds 7,592. One query returns at most
+  // MAX_SEARCH_LIMIT rows, so a quote above that would promise a file we cannot
+  // build — priced on what was found, but not on what the buyer was shown.
+  it('prices the query ceiling, so the biggest quotable list is deliverable', () => {
+    assert.ok(priceCents(MAX_SEARCH_LIMIT) !== null)
   })
 
-  it('prices rise with record count', () => {
-    const sorted = [...PACKS].sort((a, b) => a.recordCount - b.recordCount)
-    for (let i = 1; i < sorted.length; i += 1) {
-      assert.ok(
-        sorted[i].amountCents > sorted[i - 1].amountCents,
-        `${sorted[i].id} must cost more than ${sorted[i - 1].id}`,
-      )
-    }
-  })
-
-  it('gets cheaper per company as the pack grows', () => {
-    // A bigger pack costing more per company is an upgrade nobody takes, and
-    // it is the easy mistake to make when a price is changed by hand.
-    const sorted = [...PACKS].sort((a, b) => a.recordCount - b.recordCount)
-    for (let i = 1; i < sorted.length; i += 1) {
-      const dearer = sorted[i].amountCents / sorted[i].recordCount
-      const cheaper = sorted[i - 1].amountCents / sorted[i - 1].recordCount
-      assert.ok(
-        dearer < cheaper,
-        `${sorted[i].id} costs more per company than ${sorted[i - 1].id}`,
-      )
-    }
-  })
-
-  it('never prices a whole pack below the minimum sale', () => {
-    // A pack under the floor could not be sold at any size, full or short.
-    for (const pack of PACKS) {
-      assert.ok(pack.amountCents >= MIN_SALE_CENTS, pack.id)
-    }
-  })
-
-  it('refuses an unknown pack id, so price cannot be forged', () => {
-    assert.equal(getPack('free-1000000'), undefined)
-    assert.equal(getPack(null), undefined)
-  })
-})
-
-describe('pack / query limits', () => {
-  // A pack bigger than the query ceiling would silently ship a short file: the
-  // buyer pays for 1000 records and receives 500, with nothing raising an error.
-  it('no pack exceeds the maximum rows a single query returns', () => {
-    for (const pack of PACKS) {
-      assert.ok(
-        pack.recordCount <= MAX_SEARCH_LIMIT,
-        `pack ${pack.id} wants ${pack.recordCount} rows but the query ceiling is ${MAX_SEARCH_LIMIT}`,
-      )
-    }
+  it('sells nothing smaller than the minimum, and the minimum fits', () => {
+    assert.equal(priceCents(MIN_RECORDS - 1), null)
+    assert.ok(MIN_RECORDS <= MAX_SEARCH_LIMIT)
   })
 })
 
 describe('formatUsd', () => {
   it('drops cents on round amounts', () => {
-    assert.equal(formatUsd(1900), '$19')
-    assert.equal(formatUsd(4900), '$49')
+    assert.equal(formatUsd(900), '$9')
+    assert.equal(formatUsd(7650), '$76.50')
   })
 
   it('keeps cents when they matter', () => {

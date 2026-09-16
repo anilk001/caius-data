@@ -6,8 +6,8 @@ import { searchCompaniesFull } from '@/lib/search'
 import { csvFilename, toCsv, withBom } from '@/lib/csv'
 import { PACK_COLUMNS } from '@/lib/export-columns'
 import { mergeByBuyer, overFetch } from '@/lib/buyers'
+import { MIN_RECORDS } from '@/lib/pricing'
 import { MAX_SEARCH_LIMIT } from '@/lib/search-limits'
-import { getPack, DEFAULT_PACK_ID } from '@/lib/packs'
 import { sendPackDeliveryEmail } from '@/lib/email'
 import { EXPORT_BUCKET } from '@/lib/env'
 
@@ -17,7 +17,6 @@ interface DeliveryContext {
   email: string
   filters: { keyword: string | null; hs4: string | null; port: string | null; state: string | null }
   recordCount: number
-  packId: string
   session: Stripe.Checkout.Session
 }
 
@@ -34,7 +33,6 @@ async function deliverExistingPack(
   ctx: DeliveryContext,
 ) {
   const admin = createAdminClient()
-  const pack = getPack(ctx.packId)
 
   const filename = storagePath.split('/').pop() ?? 'caius-data.csv'
   const { data: signed, error: signError } = await admin.storage
@@ -54,8 +52,8 @@ async function deliverExistingPack(
     hs4: ctx.filters.hs4 || 'all',
     keyword: ctx.filters.keyword,
     recordCount: ctx.recordCount,
-    amountCents: ctx.session.amount_total ?? pack?.amountCents ?? 0,
-    packName: pack?.name ?? 'Buyer',
+    amountCents: ctx.session.amount_total ?? 0,
+    packName: 'Buyer',
   })
 
   await admin
@@ -83,10 +81,8 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
   const sessionId = session.id
 
   const metadata = session.metadata ?? {}
-  const packId = metadata.pack_id || DEFAULT_PACK_ID
-  const pack = getPack(packId)
   const recordCount = Number.parseInt(
-    metadata.record_count || String(pack?.recordCount ?? 200),
+    metadata.record_count || String(MIN_RECORDS),
     10,
   )
 
@@ -134,12 +130,11 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
       {
         email,
         filters,
-        // The count of rows ACTUALLY in the stored file, not the pack's
-        // nominal size. A 200-pack whose filters matched 43 companies
+        // The count of rows ACTUALLY in the stored file, not the number
+        // ordered. A list ordered at 200 whose filters matched 43 companies
         // delivers 43, and the email must say 43 — the metadata figure is
         // what was ordered, not what was sent.
         recordCount: existing.record_count ?? recordCount,
-        packId,
         session,
       },
     )
@@ -156,9 +151,9 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
         customer_email: email,
         hs4_code: filters.hs4 ?? '0000',
         record_count: recordCount,
-        amount_cents: session.amount_total ?? pack?.amountCents ?? 0,
+        amount_cents: session.amount_total ?? 0,
         status: 'pending',
-        query_params: { pack_id: packId, ...filters },
+        query_params: { records: recordCount, ...filters },
       })
       .select('id')
       .single()
@@ -171,7 +166,7 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
       .from('orders')
       .update({
         customer_email: email,
-        amount_cents: session.amount_total ?? pack?.amountCents ?? 0,
+        amount_cents: session.amount_total ?? 0,
       })
       .eq('id', orderId)
   }
@@ -180,7 +175,7 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
   // One query, every column, already ranked by volume. The withheld columns
   // (street address, port, first/last seen) are what the buyer is paying for.
   //
-  // Over-fetch, then merge: a pack sold as N companies must contain N companies
+  // Over-fetch, then merge: a list sold as N companies must contain N companies
   // a buyer can count, and one buyer filing from several warehouses is several
   // rows in `companies`. Asking for exactly N and merging afterwards would
   // deliver fewer than N every time a buyer has two addresses.
@@ -202,7 +197,7 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
   // The delivery email reads its count from here, so a short pack says so
   // rather than claiming a number the file does not contain.
   //
-  // Checkout already priced the pack pro rata on the count it saw, so a
+  // Checkout already priced the list on the count it saw, so a
   // shortfall here means the two counts disagreed — the data changed between
   // payment and fulfilment. That is an overcharge, and it is recorded on the
   // order and logged rather than left for the buyer to notice.
@@ -219,7 +214,7 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
       .update({
         record_count: ordered.length,
         query_params: {
-          pack_id: packId,
+          records: recordCount,
           ...filters,
           ...(overcharged
             ? { paid_for: recordCount, refund_owed_for: recordCount - ordered.length }
@@ -271,7 +266,6 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
     email,
     filters,
     recordCount: ordered.length,
-    packId,
     session,
   })
 

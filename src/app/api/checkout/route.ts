@@ -2,20 +2,13 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getStripe } from '@/lib/stripe'
-import {
-  getPack,
-  isTooSmallToSell,
-  minCompaniesFor,
-  proratedAmountCents,
-  MIN_SALE_CENTS,
-} from '@/lib/packs'
+import { priceCents, MIN_RECORDS } from '@/lib/pricing'
 import { searchCompanies } from '@/lib/search'
 import { mergeByBuyer, overFetch } from '@/lib/buyers'
 import { MAX_SEARCH_LIMIT } from '@/lib/search-limits'
 import type { CompanyRow } from '@/types/database'
 import { checkoutSchema } from '@/lib/validation'
 import { siteUrl } from '@/lib/env'
-import { formatUsd } from '@/lib/utils'
 import { getConfigStatus } from '@/lib/config-status'
 
 export const dynamic = 'force-dynamic'
@@ -45,11 +38,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { packId, email, ...filters } = parsed.data
-  const pack = getPack(packId)
-  if (!pack) {
-    return NextResponse.json({ error: 'Unknown pack.' }, { status: 400 })
-  }
+  const { records: requested, email, ...filters } = parsed.data
 
   // Fail before Stripe rather than inside it. Without this the missing-key
   // error surfaces as an opaque 500 the buyer cannot act on, and which takes
@@ -96,32 +85,24 @@ export async function POST(request: NextRequest) {
     const anon = await createClient()
     const { rows: available } = await searchCompanies(anon, {
       ...filters,
-      limit: overFetch(pack.recordCount, MAX_SEARCH_LIMIT),
+      limit: overFetch(requested, MAX_SEARCH_LIMIT),
     })
-
-    if (available.length === 0) {
-      return NextResponse.json(
-        { error: 'No companies match those filters, so there is nothing to sell you.' },
-        { status: 409 },
-      )
-    }
 
     // mergeByBuyer wants full rows; the public projection carries every field it
     // reads, so the cast is safe and avoids handing the anon client '*'.
     const buyers = mergeByBuyer(available as unknown as CompanyRow[])
-    const deliverable = Math.min(buyers.length, pack.recordCount)
 
-    // Short niche, pro-rata price. 120 of 200 companies costs 120/200 of the
-    // pack, never the full price for a short file.
-    const amountCents = proratedAmountCents(pack, deliverable)
+    // Never more than the buyer asked for, never more than we hold.
+    const deliverable = Math.min(buyers.length, requested)
+    const amountCents = priceCents(deliverable)
 
-    if (isTooSmallToSell(pack, deliverable)) {
+    if (amountCents === null) {
       return NextResponse.json(
         {
           error:
-            `Only ${deliverable} ${deliverable === 1 ? 'company matches' : 'companies match'} ` +
-            `those filters. Our smallest sale is ${formatUsd(MIN_SALE_CENTS)}, which needs at ` +
-            `least ${minCompaniesFor(pack)} companies — try a broader HS code or drop a filter.`,
+            `Only ${buyers.length} ${buyers.length === 1 ? 'company matches' : 'companies match'} ` +
+            `those filters. The smallest list we sell is ${MIN_RECORDS} — try a broader ` +
+            `HS code or drop a filter.`,
         },
         { status: 409 },
       )
@@ -145,7 +126,7 @@ export async function POST(request: NextRequest) {
             currency: 'usd',
             unit_amount: amountCents,
             product_data: {
-              name: `Caius Data — ${pack.name} pack (${deliverable} companies)`,
+              name: `Caius Data — ${deliverable.toLocaleString('en-US')} US importer companies`,
               description: `${nicheLabel}. One-time purchase, delivered as CSV. No subscription.`,
             },
           },
@@ -153,7 +134,6 @@ export async function POST(request: NextRequest) {
       ],
       // Everything fulfilment needs, so the webhook is self-contained.
       metadata: {
-        pack_id: pack.id,
         record_count: String(deliverable),
         hs4: filters.hs4 ?? '',
         keyword: filters.keyword ?? '',
@@ -180,7 +160,7 @@ export async function POST(request: NextRequest) {
       amount_cents: amountCents,
       status: 'pending',
       query_params: {
-        pack_id: pack.id,
+        records: deliverable,
         keyword: filters.keyword ?? null,
         hs4: filters.hs4 ?? null,
         port: filters.port ?? null,
@@ -203,7 +183,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          `Something went wrong starting checkout for the ${formatUsd(pack.amountCents)} pack. ` +
+          'Something went wrong starting checkout. ' +
           `You have not been charged. Quote reference ${reference} if you email support@caiusdata.com.`,
         reference,
       },

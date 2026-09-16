@@ -10,7 +10,12 @@
  * annual subscriptions this product exists to undercut. It also ignores what
  * the buyer is getting — the 5,000th company on a lane ships a fraction of what
  * the 50th does, and nobody will ever email it. So the price per company falls
- * as the list deepens, and stops entirely at the cap.
+ * as the list deepens.
+ *
+ * There is no cap. The taper alone keeps even the largest realistic lane below
+ * the market: the whole of HS 6204 across every origin, 15,916 companies, comes
+ * to $867 against Volza's $1,500 a year. A list would have to exceed 28,500
+ * companies before this pricing met the cheapest annual subscription.
  */
 
 /** Included in the base price. Below this, no sale — see MIN_RECORDS. */
@@ -22,19 +27,10 @@ export const BASE_CENTS = 900
  * final band is open-ended.
  */
 export const RATE_BANDS: ReadonlyArray<{ upTo: number | null; cents: number }> = [
-  { upTo: 250, cents: 15 },
-  { upTo: 1000, cents: 8 },
-  { upTo: null, cents: 4 },
+  { upTo: 500, cents: 15 },
+  { upTo: 1000, cents: 9 },
+  { upTo: null, cents: 5 },
 ]
-
-/**
- * Nothing costs more than this, however deep the lane.
- *
- * It is what makes a whole lane sellable: "every US buyer of HS 6204 sourcing
- * from Vietnam, 7,592 companies, $199" is a headline. The same list at an
- * untapered rate would be $1,140 and nobody would click it.
- */
-export const CAP_CENTS = 19_900
 
 /** The fewest companies worth selling. Below this we do not sell at all. */
 export const MIN_RECORDS = BASE_RECORDS
@@ -59,21 +55,14 @@ export function priceCents(records: number): number | null {
     }
   }
 
-  return Math.min(cents, CAP_CENTS)
+  return cents
 }
 
-/** Companies at which the cap takes over, so the UI can say "everything above". */
-export function recordsAtCap(): number {
-  let records = MIN_RECORDS
-  // Walk the bands rather than inverting them: the arithmetic stays correct if
-  // a rate or a band edge is edited, which is the point of keeping it in data.
-  let cents = BASE_CENTS
-  for (const band of RATE_BANDS) {
-    const span = band.upTo === null ? Infinity : band.upTo - records
-    const affordable = Math.floor((CAP_CENTS - cents) / band.cents)
-    if (affordable <= span) return records + affordable
-    cents += span * band.cents
-    records = band.upTo as number
-  }
-  return records
+/**
+ * Price per company at a given size, in cents. For showing the rate a buyer is
+ * actually getting, which is the argument for taking the bigger list.
+ */
+export function perCompanyCents(records: number): number | null {
+  const total = priceCents(records)
+  return total === null ? null : total / records
 }

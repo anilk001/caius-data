@@ -1,18 +1,29 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Check, Loader2, ShoppingCart } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import {
-  PACKS,
-  minCompaniesFor,
-  proratedAmountCents,
-  MIN_SALE_CENTS,
-  type Pack,
-} from '@/lib/packs'
-import { cn, formatUsd } from '@/lib/utils'
+import { MIN_RECORDS, perCompanyCents, priceCents } from '@/lib/pricing'
+import { MAX_SEARCH_LIMIT } from '@/lib/search-limits'
+import { formatUsd } from '@/lib/utils'
 import type { Filters } from '@/lib/validation'
+
+/**
+ * Choose how many companies to buy.
+ *
+ * Fixed packs are gone. They forced the choice between charging full price for
+ * a short file and refusing a niche that holds 120 companies when the pack says
+ * 200. Buying a count removes the question — there is no pack size left to fall
+ * short of, and the price follows what is actually delivered.
+ *
+ * The price shown here is computed with the same function the server uses, but
+ * it is only ever an indication: the browser sends a count, never an amount,
+ * and checkout recounts distinct buyers before charging. A client that could
+ * name its own price would name zero.
+ */
+
+/** Shortcuts, so most buyers never touch the input. */
+const PRESETS = [50, 200, 500, 1000] as const
 
 export function PackPicker({
   filters,
@@ -23,22 +34,35 @@ export function PackPicker({
   disabled: boolean
   matchCount: number | null
 }) {
-  const [pending, setPending] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function buy(pack: Pack) {
-    setPending(pack.id)
+  // Never offer more than one query can return. Without this clamp a lane with
+  // 7,592 buyers would quote $451 for 2,000 companies and deliver 500 — priced
+  // correctly on what was found, but not what the buyer was shown.
+  const held = matchCount ?? 0
+  const available = Math.min(held, MAX_SEARCH_LIMIT)
+  const capped = held > MAX_SEARCH_LIMIT
+  const [records, setRecords] = useState<number>(200)
+
+  // Never offer more than we hold, and never fewer than we sell.
+  const wanted = Math.min(Math.max(records, MIN_RECORDS), Math.max(available, MIN_RECORDS))
+  const sellable = available >= MIN_RECORDS
+  const price = useMemo(() => priceCents(wanted), [wanted])
+  const perEach = useMemo(() => perCompanyCents(wanted), [wanted])
+
+  async function buy() {
+    setPending(true)
     setError(null)
 
     try {
       const response = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...filters, packId: pack.id }),
+        body: JSON.stringify({ ...filters, records: wanted }),
       })
 
       const payload = await response.json()
-
       if (!response.ok || !payload.url) {
         throw new Error(payload.error ?? 'Checkout could not be started.')
       }
@@ -46,133 +70,136 @@ export function PackPicker({
       window.location.assign(payload.url)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
-      setPending(null)
+      setPending(false)
     }
   }
 
   return (
     <section id="pricing" className="space-y-4">
       <div className="space-y-1">
-        <h2 className="text-lg font-semibold tracking-tight">
-          Take the full list
-        </h2>
+        <h2 className="text-lg font-semibold tracking-tight">Take the list</h2>
         <p className="text-muted-foreground text-sm">
-          One payment. The CSV lands in your inbox in under a minute, with street
+          Pay for the companies you take, nothing else. One payment, no
+          subscription. The CSV lands in your inbox in under a minute with street
           address, port of entry and the full shipment date range unlocked.
-          {matchCount !== null && matchCount > 0 ? (
-            <>
-              {' '}
-              We currently hold{' '}
-              <span className="text-foreground font-medium">
-                ~{matchCount.toLocaleString('en-US')}
-              </span>{' '}
-              matching importers.
-            </>
-          ) : null}
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        {PACKS.map((pack) => {
-          const capped =
-            matchCount !== null && matchCount > 0 && matchCount < pack.recordCount
-          // Priced per company, so a short niche is charged pro rata. The count
-          // shown here is an estimate from the search query; checkout recounts
-          // distinct buyers and is what the buyer is actually charged.
-          const companies = capped ? matchCount : pack.recordCount
-          const price = capped
-            ? proratedAmountCents(pack, matchCount)
-            : pack.amountCents
-          // Below the minimum sale the button is disabled rather than left to
-          // fail at checkout. A buyer who clicks and is refused has been shown
-          // a price we were never going to honour.
-          const tooSmall = capped && price < MIN_SALE_CENTS
-
-          return (
-            <div
-              key={pack.id}
-              className={cn(
-                'bg-card flex flex-col gap-4 rounded-xl border p-5 transition-shadow',
-                pack.highlight && 'border-brand/40 shadow-sm',
-              )}
-            >
-              <div className="space-y-1">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium">{pack.name}</p>
-                  {pack.highlight && <Badge variant="brand">Most popular</Badge>}
-                </div>
-                <p className="flex items-baseline gap-1.5">
-                  <span className="text-3xl font-semibold tracking-tight">
-                    {tooSmall ? '—' : formatUsd(price)}
+      <div className="bg-card space-y-5 rounded-xl border p-5 sm:p-6">
+        {!sellable ? (
+          <p className="text-muted-foreground text-sm">
+            {available > 0
+              ? `Only ${available.toLocaleString('en-US')} companies match these filters. The smallest list we sell is ${MIN_RECORDS} — widen your search and this unlocks.`
+              : 'Enter an HS code or product keyword above to price a list.'}
+          </p>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="record-count"
+                  className="text-muted-foreground text-xs font-medium"
+                >
+                  How many companies?
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="record-count"
+                    type="number"
+                    min={MIN_RECORDS}
+                    max={available}
+                    step={10}
+                    value={records}
+                    onChange={(e) => setRecords(Number(e.target.value) || MIN_RECORDS)}
+                    onBlur={() => setRecords(wanted)}
+                    className="border-input bg-background focus-visible:ring-ring w-28 rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+                  />
+                  <span className="text-muted-foreground text-sm">
+                    of {available.toLocaleString('en-US')} available
                   </span>
-                  {capped && !tooSmall && (
-                    <span className="text-muted-foreground text-xs line-through">
-                      {formatUsd(pack.amountCents)}
-                    </span>
-                  )}
-                  <span className="text-muted-foreground text-xs">one time</span>
-                </p>
+                </div>
               </div>
 
-              <ul className="text-muted-foreground flex-1 space-y-2 text-sm">
-                <li className="flex gap-2">
-                  <Check className="text-brand mt-0.5 size-3.5 shrink-0" />
-                  <span>
-                    <span className="text-foreground font-medium">
-                      {companies.toLocaleString('en-US')}
-                    </span>{' '}
-                    importer companies
-                    {capped ? '' : ' — one row each, never duplicated'}
+              <p className="flex items-baseline gap-2">
+                <span className="text-3xl font-semibold tracking-tight">
+                  {price === null ? '—' : formatUsd(price)}
+                </span>
+                {perEach !== null && (
+                  <span className="text-muted-foreground text-xs">
+                    {(perEach / 100).toFixed(3).replace(/^0/, '')}¢ per company
                   </span>
-                </li>
-                <li className="flex gap-2">
-                  <Check className="text-brand mt-0.5 size-3.5 shrink-0" />
-                  <span>{pack.blurb}</span>
-                </li>
-                <li className="flex gap-2">
-                  <Check className="text-brand mt-0.5 size-3.5 shrink-0" />
-                  <span>All 11 columns unlocked, CSV by email</span>
-                </li>
-              </ul>
-
-              {capped && !tooSmall && (
-                <p className="text-muted-foreground text-xs">
-                  Your filters match ~{matchCount.toLocaleString('en-US')} companies,
-                  so the price is reduced to match. You are never charged for
-                  rows we cannot supply.
-                </p>
-              )}
-
-              {tooSmall && (
-                <p className="text-muted-foreground text-xs">
-                  Only ~{matchCount.toLocaleString('en-US')} companies match. Our
-                  smallest sale is {formatUsd(MIN_SALE_CENTS)}, which needs at least{' '}
-                  {minCompaniesFor(pack)} — widen your search and this unlocks.
-                </p>
-              )}
-
-              <Button
-                variant={pack.highlight ? 'brand' : 'default'}
-                onClick={() => buy(pack)}
-                disabled={disabled || tooSmall || pending !== null}
-              >
-                {pending === pack.id ? (
-                  <>
-                    <Loader2 className="animate-spin" />
-                    Opening checkout…
-                  </>
-                ) : tooSmall ? (
-                  <>Too few companies</>
-                ) : (
-                  <>
-                    <ShoppingCart />
-                    Buy {companies.toLocaleString('en-US')} companies
-                  </>
                 )}
-              </Button>
+              </p>
             </div>
-          )
-        })}
+
+            <div className="flex flex-wrap gap-2">
+              {PRESETS.filter((n) => n <= available).map((n) => (
+                <Button
+                  key={n}
+                  type="button"
+                  variant={wanted === n ? 'brand' : 'outline'}
+                  size="sm"
+                  onClick={() => setRecords(n)}
+                >
+                  {n.toLocaleString('en-US')}
+                </Button>
+              ))}
+              {available > MIN_RECORDS && !PRESETS.includes(available as never) && (
+                <Button
+                  type="button"
+                  variant={wanted === available ? 'brand' : 'outline'}
+                  size="sm"
+                  onClick={() => setRecords(available)}
+                >
+                  All {available.toLocaleString('en-US')}
+                </Button>
+              )}
+            </div>
+
+            {capped && (
+              <p className="text-muted-foreground text-xs">
+                {held.toLocaleString('en-US')} companies match, and we deliver the
+                top {MAX_SEARCH_LIMIT} by shipment volume in one file. Need the
+                whole lane? Email support@caiusdata.com.
+              </p>
+            )}
+
+            <ul className="text-muted-foreground grid gap-2 text-sm sm:grid-cols-3">
+              <li className="flex gap-2">
+                <Check className="text-brand mt-0.5 size-3.5 shrink-0" />
+                <span>One row per company, never duplicated</span>
+              </li>
+              <li className="flex gap-2">
+                <Check className="text-brand mt-0.5 size-3.5 shrink-0" />
+                <span>Forwarders and consolidators removed</span>
+              </li>
+              <li className="flex gap-2">
+                <Check className="text-brand mt-0.5 size-3.5 shrink-0" />
+                <span>All 12 columns unlocked, CSV by email</span>
+              </li>
+            </ul>
+
+            <Button
+              variant="brand"
+              className="w-full sm:w-auto"
+              onClick={buy}
+              disabled={disabled || pending || price === null}
+            >
+              {pending ? (
+                <>
+                  <Loader2 className="animate-spin" />
+                  Opening checkout…
+                </>
+              ) : (
+                <>
+                  <ShoppingCart />
+                  Buy {wanted.toLocaleString('en-US')} companies
+                  {price !== null && ` — ${formatUsd(price)}`}
+                </>
+              )}
+            </Button>
+          </>
+        )}
       </div>
 
       {disabled && (

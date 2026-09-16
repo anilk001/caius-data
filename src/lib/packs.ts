@@ -1,96 +1,12 @@
 /**
- * Buyer packs. One-time purchase, no subscription — that is the whole pitch.
+ * Free sample size.
  *
- * `id` is what travels through Stripe metadata, so these keys are effectively
- * permanent. Change a price by editing `amountCents`; historical orders keep
- * the amount they were charged because it is snapshotted on the order row.
+ * What used to live here — fixed packs at fixed prices — is gone. Buyers choose
+ * a count and pay per company; see src/lib/pricing.ts. Fixed packs forced a
+ * choice between charging full price for a short file and refusing a niche that
+ * held 120 companies when the pack said 200, and neither was defensible.
+ *
+ * Three rows is enough to prove the format and the column set without being a
+ * usable list on its own.
  */
-
-export interface Pack {
-  id: string
-  name: string
-  recordCount: number
-  amountCents: number
-  blurb: string
-  highlight?: boolean
-}
-
-export const PACKS: Pack[] = [
-  {
-    id: 'starter-50',
-    name: 'Starter',
-    recordCount: 50,
-    amountCents: 900,
-    blurb: 'The 50 biggest buyers on your lane. Sold whole, never part.',
-  },
-  {
-    id: 'standard-200',
-    name: 'Standard',
-    recordCount: 200,
-    amountCents: 2900,
-    blurb: 'Two hundred buyers — enough to work a full outreach quarter.',
-    highlight: true,
-  },
-  {
-    id: 'pro-500',
-    name: 'Pro',
-    recordCount: 500,
-    amountCents: 5900,
-    blurb: 'Five hundred buyers, the deepest list we currently deliver.',
-  },
-]
-
-export const DEFAULT_PACK_ID = 'standard-200'
-
-export function getPack(id: string | null | undefined): Pack | undefined {
-  if (!id) return undefined
-  return PACKS.find((pack) => pack.id === id)
-}
-
 export const FREE_SAMPLE_ROWS = 3
-
-/**
- * The smallest sale worth making, in cents.
- *
- * Stripe's own floor is 50 cents, but a $2 pack is not a business. Every sale
- * costs the same to support whatever it earned — the same refund risk, the same
- * inbox, the same chargeback exposure — and a tiny file sets an expectation of
- * what a Caius pack contains that the next buyer inherits. Below this we do not
- * sell at all rather than sell something thin.
- */
-export const MIN_SALE_CENTS = 900
-
-/**
- * What to charge when a niche holds fewer companies than the pack advertises.
- *
- * A pack is priced per company, so 120 of 200 costs 120/200 of the price. The
- * alternative — full price for a short file — is what a buyer notices on their
- * first purchase and never forgives, and the pack picker has always promised
- * that you are never charged for empty rows.
- *
- * Integer arithmetic, floored, so rounding can only ever go the buyer's way.
- */
-export function proratedAmountCents(pack: Pack, deliverable: number): number {
-  if (deliverable >= pack.recordCount) return pack.amountCents
-  if (deliverable <= 0) return 0
-  return Math.floor((pack.amountCents * deliverable) / pack.recordCount)
-}
-
-/** True when a short pack is not worth selling. */
-export function isTooSmallToSell(pack: Pack, deliverable: number): boolean {
-  return proratedAmountCents(pack, deliverable) < MIN_SALE_CENTS
-}
-
-/**
- * Fewest companies this pack can be sold with.
- *
- * Derived from MIN_SALE_CENTS rather than fixed, so changing the floor or a
- * pack's price moves this with it. Ceiling, because the pro-rata price floors:
- * one company short of this rounds down under the minimum.
- */
-export function minCompaniesFor(pack: Pack): number {
-  return Math.min(
-    pack.recordCount,
-    Math.ceil((MIN_SALE_CENTS * pack.recordCount) / pack.amountCents),
-  )
-}

@@ -3,23 +3,50 @@
 Worked 16 September 2026. Run `python3 scripts/pricing_model.py` to regenerate
 the arithmetic; `docs/pricing-model-output.txt` is the current output.
 
-## Floor: no sale under $9
+## Pricing: pay for the companies you take
 
-A niche holding fewer companies than the pack is charged pro rata — 120 of 200
-costs 120/200 of the price — but **below $9 there is no sale at all**. Stripe's
-own floor is 50 cents; this is a business one. Every sale costs the same to
-support whatever it earned, and a thin file sets an expectation of what a Caius
-pack contains that the next buyer inherits.
+No packs. The buyer chooses a count, minimum 50, and pays per company.
 
-| Pack | Size | Price | Fewest companies sellable |
-| --- | --- | --- | --- |
-| Starter | 200 | $19 | 95 |
-| Growth | 350 | $29 | 109 |
-| Pro | 500 | $49 | 92 |
+| | |
+| --- | --- |
+| First 50 | **$9** |
+| 51 – 500 | 15c each |
+| 501 – 1,000 | 9c each |
+| 1,001 and up | 5c each |
 
-The thresholds derive from the floor and the pack price, so changing either
-moves them. Below it the pack card shows no price and the button reads "Too few
-companies", rather than letting someone click through to a refusal.
+| Companies | Price | Per company |
+| --- | --- | --- |
+| 50 | $9.00 | 18.0c |
+| 100 | $16.50 | 16.5c |
+| 200 | $31.50 | 15.8c |
+| 500 | $76.50 | 15.3c |
+| 1,000 | $121.50 | 12.2c |
+| 7,592 (whole Vietnam 6204 lane) | $451.10 | 5.9c |
+| 15,916 (whole 6204 heading) | $867.30 | 5.5c |
+
+**Below 50 companies there is no sale.** A lane holding 40 is not sold at all,
+rather than sold thin.
+
+**No cap.** The taper alone keeps even the largest realistic lane below the
+market: the whole of HS 6204 across every origin is $867 against Volza's $1,500
+a year. A list would have to pass roughly **28,500 companies** before this
+pricing met the cheapest annual subscription — worth knowing, not worth
+capping for. A test pins that crossover so it cannot drift unnoticed.
+
+Two properties are tested at every size from 50 to 5,000 rather than at sample
+points, because one inverted band edge breaks them silently: taking more can
+never cost more each, and never less in total.
+
+### Blocking the whole-lane sale
+
+`MAX_SEARCH_LIMIT` is 500, so 500 is the largest list one query can build, and
+the picker clamps to it: quoting $451 for 2,000 companies and delivering 500
+would be priced correctly on what was found but not on what the buyer was shown.
+
+Everything above 500 is therefore unsellable today, and that is where the money
+is — a whole lane at $451 against $165 of data bought once and resold for ever.
+Lifting it means paginating `searchCompaniesFull` rather than issuing one capped
+query. Until then the picker says so and points at email.
 
 ## What a row is
 
@@ -45,7 +72,8 @@ before a pack count is promised, not after.
 
 The system enforces the promise rather than hoping for it: fulfilment
 over-fetches, merges, then takes exactly N, and checkout counts distinct buyers
-so the Stripe line item names the number the file will actually contain.
+and prices that count — so the Stripe line item names the number the file will
+actually contain, and the buyer is charged for it and nothing else.
 
 ## The one fact that decides pricing
 
