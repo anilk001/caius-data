@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from bold_shipments import COLUMNS, convert, iso_date, to_row
+from bold_shipments import COLUMNS, collapse_repeats, convert, iso_date, to_row
 
 failures: list[str] = []
 
@@ -149,6 +149,31 @@ check("and says what it dropped", dropped["not type=imp"], 1)
 # list we want, so nothing is dropped unless asked.
 unfiltered, _ = convert([GLOBAL, exports])
 check("no filter means no dropping", len(unfiltered), 2)
+
+# --- Repeating goods text, from live records --------------------------------
+# A consignment of N identical cartons arrives with its line item concatenated
+# N times, unseparated. Sold as-is it reads like a broken file.
+check("two identical line items fold to one",
+      collapse_repeats("SLIM PULL-ON TROUSERS HTS: 62046290" * 2),
+      "SLIM PULL-ON TROUSERS HTS: 62046290")
+check("eleven fold to one, not to a smaller multiple",
+      collapse_repeats("COTTON WOVEN GIRLS DRESS HTS: 62044290" * 11),
+      "COTTON WOVEN GIRLS DRESS HTS: 62044290")
+
+# Two genuinely different line items on one bill are two things the buyer
+# shipped. Folding those would destroy what the pack is sold for.
+mixed = ("98% ORGANIC COTTON 2% ELASTANE WOVEN WOMENS PANT. "
+         "97% ORGANIC COTTON 3% ELASTANE WOVEN WOMENS PANT.")
+check("different line items are left alone", collapse_repeats(mixed), mixed)
+check("a single description is untouched",
+      collapse_repeats("ELASTOMULTIESTER WOVEN LADIES DRESS WITH HTS: 62044390"),
+      "ELASTOMULTIESTER WOVEN LADIES DRESS WITH HTS: 62044390")
+check("empty stays empty", collapse_repeats(""), "")
+
+# End to end, on a record as it actually arrived.
+folded = to_row(dict(GLOBAL, products="WOMENS LINEN WOVEN SKIRT HTS: 62044290" * 6))
+check("the converter folds on the way through",
+      folded["Product Description"], "WOMENS LINEN WOVEN SKIRT HTS: 62044290")
 
 if failures:
     print(f"\n{len(failures)} failure(s):\n")

@@ -81,6 +81,36 @@ def _value(record: dict, keys: tuple[str, ...]) -> str:
     return ""
 
 
+def collapse_repeats(text: str) -> str:
+    """
+    Fold a goods description that repeats itself.
+
+    A consignment of eleven identical cartons arrives with its line item
+    concatenated eleven times, unseparated:
+
+        "WOMENS LINEN WOVEN SKIRT HTS: 62044290WOMENS LINEN WOVEN SKIRT HTS: …"
+
+    Sold as-is it reads like a broken file. The repetition carries no
+    information — the carton count is already its own field — so one copy is
+    kept. Only exact tiling is folded: two genuinely different line items on
+    one bill are two things the buyer shipped, and both belong in the cell.
+    """
+    if not text:
+        return text
+
+    length = len(text)
+    # The shortest unit that tiles the whole string wins, so eleven copies fold
+    # to one rather than to a smaller number of copies.
+    for size in range(1, length // 2 + 1):
+        if length % size:
+            continue
+        unit = text[:size]
+        if unit * (length // size) == text:
+            return unit
+
+    return text
+
+
 def iso_date(raw: str) -> str:
     """
     Normalise a date to YYYY-MM-DD.
@@ -107,7 +137,9 @@ def to_row(record: dict) -> dict[str, str] | None:
     row["Arrival Date"] = iso_date(row["Arrival Date"])
     # Filer-typed goods text sometimes carries a contact. A column allowlist
     # cannot help when the address is inside a column we want.
-    row["Product Description"] = redact_contacts(row["Product Description"]) or ""
+    row["Product Description"] = (
+        redact_contacts(collapse_repeats(row["Product Description"])) or ""
+    )
     return row
 
 

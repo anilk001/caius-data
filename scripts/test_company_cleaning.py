@@ -249,6 +249,23 @@ if not looks_like_consolidator(900, 27_000.0, 900):
 if looks_like_consolidator(120, 600.0, 120):
     failures.append("  a company below the volume threshold must never be judged")
 
+# --- Brackets left open by cutting a noise clause ----------------------------
+# "COACH SERVICES INC (DBA COACH) CCLS" is balanced until the DBA clause is
+# removed, and removing it leaves a bracket opening onto nothing.
+for raw, expected in [
+    ("COACH SERVICES INC (DBA COACH) CCLS", "Coach Services Inc"),
+    ("WEAR PACT, LLC C/O FLEXPORT", "Wear Pact, LLC"),
+    ("SUGARTOWN WORLDWIDE LLC.", "Sugartown Worldwide LLC"),
+    ("JP BODEN SERVICES INC.", "JP Boden Services Inc"),
+]:
+    got = clean_company_name(raw)
+    if got != expected:
+        failures.append(f"  {raw!r}\n    expected {expected!r}\n    got      {got!r}")
+
+# A bracket with real content inside is still closed rather than cut.
+if clean_company_name("LAST BRAND INC (QUINCE") != "Last Brand Inc (Quince)":
+    failures.append("  an open bracket with a brand inside must be closed, not stripped")
+
 if failures:
     print(f"\n{len(failures)} failure(s):\n")
     print("\n\n".join(failures))

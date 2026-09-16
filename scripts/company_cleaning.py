@@ -64,6 +64,9 @@ _GLUED_SUFFIX = re.compile(
 # rather than discarded.
 _UNBALANCED_OPEN = re.compile(r"\([^()]*$")
 
+# A bracket left opening onto nothing, once a noise clause has been cut away.
+_TRAILING_OPEN = re.compile(r"\s*\(\s*$")
+
 # Dotted initials: U.S.A., J.P., A.B.C. A plain title-caser lower-cases
 # everything after the first letter and yields "U.s.a.".
 _DOTTED_INITIALS = re.compile(r"^(?:[A-Za-z]\.){2,}[A-Za-z]?\.?$")
@@ -92,8 +95,6 @@ def clean_company_name(raw: str | None) -> str | None:
         return None
 
     name = _WS.sub(" ", _GLUED_SUFFIX.sub(r"\1 ", str(raw))).strip()
-    if _UNBALANCED_OPEN.search(name):
-        name = f"{name})"
     if name.lower() in _PLACEHOLDER_NAMES:
         return None
 
@@ -107,6 +108,14 @@ def clean_company_name(raw: str | None) -> str | None:
 
     if not name or lowered in _PLACEHOLDER_NAMES:
         return None
+
+    # Brackets are repaired after the noise clauses are gone, not before.
+    # "COACH SERVICES INC (DBA COACH) CCLS" is balanced until "DBA…" is cut,
+    # and cutting it leaves "Coach Services Inc (" — a bracket opening onto
+    # nothing.
+    name = _TRAILING_OPEN.sub("", name).strip(" ,-")
+    if _UNBALANCED_OPEN.search(name):
+        name = f"{name})"
 
     # ALL CAPS is the manifest norm and reads as shouting in a CSV. Title-case
     # it, but leave names that already have mixed case alone — someone filed
