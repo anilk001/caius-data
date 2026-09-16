@@ -571,6 +571,62 @@ def clean_country(raw: str | None) -> str | None:
     return text
 
 
+# A company can be a foreign arm and still land its goods in the United States.
+# "AMERICAN EAGLE OUTFITTERS CANADA" arrived on a real record unlading in New
+# York, so the port of unlading cannot see it and the name is the only signal.
+#
+# Only Canada and Mexico are read this way, and only in the three shapes a
+# corporate arm is actually named. Widening the vocabulary would be the
+# expensive kind of wrong: "Global India Trading Inc" is a normal US importer,
+# and reading "India" out of its name would drop it from every pack silently.
+_ARM_COUNTRIES = {"canada": "CA", "mexico": "MX"}
+
+# Words that follow a country in the name of a subsidiary rather than of a
+# brand: "SML Canada Acquisition Corp" is Canadian, "Canada Goose" is not.
+_ARM_FOLLOWERS = {
+    "acquisition", "acquisitions", "holding", "holdings", "operations",
+    "retail", "sourcing", "services", "trading", "distribution", "company",
+}
+
+
+def country_from_name(name: str | None) -> str | None:
+    """
+    The country a company name declares itself to belong to, if it does.
+
+    None means the name says nothing, which is the usual answer.
+    """
+    if not name:
+        return None
+
+    text = _WS.sub(" ", str(name).lower())
+
+    # "GAP (CANADA) INC" — the standard way a subsidiary is written.
+    for country, code in _ARM_COUNTRIES.items():
+        if f"({country})" in text:
+            return code
+
+    tokens = [t for t in _WS.sub(" ", _PUNCT.sub(" ", text)).split(" ") if t]
+    # A leading country word is part of a brand — Canada Goose, Canada Dry.
+    for index, token in enumerate(tokens[1:], start=1):
+        code = _ARM_COUNTRIES.get(token)
+        if not code:
+            continue
+        # "NEW MEXICO" is in the United States.
+        if token == "mexico" and tokens[index - 1] == "new":
+            continue
+
+        rest = tokens[index + 1 :]
+        # "AMERICAN EAGLE OUTFITTERS CANADA", "PVH CANADA, INC" — the country
+        # ends the name, give or take a legal suffix.
+        if all(word in _SUFFIXES for word in rest):
+            return code
+        # "SML CANADA ACQUISITION CORP".
+        if rest and rest[0] in _ARM_FOLLOWERS:
+            return code
+
+    return None
+
+
 def clean_state(raw: str | None) -> str | None:
     """Normalise a US state to its two-letter code where we can."""
     if not raw:

@@ -39,6 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from company_cleaning import clean_country, country_from_name
 from personal_data import detect_personal_fields, redact_contacts
 
 # Output column -> the response fields to try, in order. First non-empty wins.
@@ -174,9 +175,17 @@ def to_row(record: dict) -> dict[str, str] | None:
     if not row["Consignee Name"]:
         return None
 
-    elsewhere = destination_country(row["Port of Unlading"])
-    if elsewhere:
-        row["Consignee Country"] = elsewhere
+    # The name first: a foreign arm can still land its goods in a US port.
+    # "AMERICAN EAGLE OUTFITTERS CANADA" arrived unlading in New York.
+    elsewhere = (
+        country_from_name(row["Consignee Name"])
+        or destination_country(row["Port of Unlading"])
+    )
+    # Normalised either way, so the CSV holds ISO codes and the report below
+    # does not have to know every spelling of "United States".
+    row["Consignee Country"] = (
+        elsewhere or clean_country(row["Consignee Country"]) or ""
+    )
 
     row["Arrival Date"] = iso_date(row["Arrival Date"])
     # Filer-typed goods text sometimes carries a contact. A column allowlist
@@ -251,7 +260,7 @@ def report(rows: list[dict]) -> None:
 
     foreign = Counter(
         r["Consignee Country"] for r in rows
-        if r["Consignee Country"] and r["Consignee Country"].upper() not in {"US", "USA", "UNITED STATES"}
+        if r["Consignee Country"] and r["Consignee Country"] != "US"
     )
     if foreign:
         total = sum(foreign.values())

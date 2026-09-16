@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from company_cleaning import (
     clean_company_name,
     clean_country,
+    country_from_name,
     looks_like_logistics,
     looks_like_consolidator,
     clean_hs4,
@@ -201,6 +202,36 @@ check("none", clean_country(None), None)
 # Not guessed at. A wrong guess relabels a buyer's nationality, which is the
 # one claim the front page makes.
 check("an unknown country is handed back", clean_country("Freedonia"), "Freedonia")
+
+# --- A foreign arm that lands its goods in a US port -------------------------
+# "AMERICAN EAGLE OUTFITTERS CANADA" arrived on a real record unlading in New
+# York. The port cannot see it; the name is what the customer reads.
+for name, code in [
+    ("Gap (Canada) Inc", "CA"),
+    ("Old Navy (Canada) Inc", "CA"),
+    ("PVH Canada, Inc", "CA"),
+    ("SML Canada Acquisition Corp", "CA"),
+    ("AMERICAN EAGLE OUTFITTERS CANADA", "CA"),
+    ("H&M Canada Ltd", "CA"),
+    ("Grupo Mexico Retail SA", "MX"),
+]:
+    check(f"arm: {name[:32]}", country_from_name(name), code)
+
+# The expensive kind of wrong is the other way round. Each of these is a real
+# or plausible US buyer that a wider rule would drop from every pack, silently.
+for name in [
+    "Canada Goose Holdings Inc",       # the country leads the brand
+    "Canada Dry Bottling Co",
+    "Global India Trading Inc",        # imports FROM India, sits in the US
+    "China Star Imports LLC",
+    "Acme New Mexico LLC",             # New Mexico is in the United States
+    "Coach Services Inc",
+    "JP Boden Services Inc",
+]:
+    check(f"not an arm: {name[:32]}", country_from_name(name), None)
+
+check("empty name declares nothing", country_from_name(""), None)
+check("none declares nothing", country_from_name(None), None)
 
 # --- States ----------------------------------------------------------------
 check("full name", clean_state("California"), "CA")

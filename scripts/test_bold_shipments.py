@@ -215,6 +215,17 @@ canadian = to_row(dict(GLOBAL, consignee_name="GAP (CANADA) INC",
 check("the port overrides the feed's country",
       canadian["Consignee Country"], "CA")
 
+# A foreign arm can land its goods in a US port, and then only the name says so.
+arm = to_row(dict(GLOBAL, consignee_name="AMERICAN EAGLE OUTFITTERS CANADA",
+                  end_port="New York, New York", country_imp="US"))
+check("the name overrides the feed's country too",
+      arm["Consignee Country"], "CA")
+
+domestic = to_row(dict(GLOBAL, consignee_name="JP BODEN SERVICES INC.",
+                       end_port="New York/Newark Area", country_imp="US"))
+check("a US buyer in a US port is left alone",
+      domestic["Consignee Country"], "US")
+
 # --- The same shipment filed twice -------------------------------------------
 # ingest_csv checks a row's fingerprint against the database, so a re-run
 # inserts nothing twice. Two identical rows inside one file are both new to it,

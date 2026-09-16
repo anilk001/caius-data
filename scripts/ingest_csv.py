@@ -46,6 +46,7 @@ from company_cleaning import (  # noqa: E402
     clean_hs4,
     clean_state,
     clean_text,
+    country_from_name,
     grouping_key,
     parse_date,
     parse_weight_kg,
@@ -252,6 +253,7 @@ class Stats:
     address_parsed: int = 0
     address_unparseable: int = 0
     skipped_logistics: int = 0
+    rows_outside_us: int = 0
     companies: int = 0
     shipments_written: int = 0
 
@@ -266,6 +268,9 @@ class Stats:
             f"  address parsed       {self.address_parsed:>8,}\n"
             f"  address unparseable  {self.address_unparseable:>8,}\n"
             f"  skipped (forwarder)  {self.skipped_logistics:>8,}\n"
+            # Written, not skipped. They keep their real country and search
+            # filters them out of US packs — see PACK_COUNTRY in src/lib/search.ts.
+            f"  rows outside the US  {self.rows_outside_us:>8,}\n"
             f"  companies upserted   {self.companies:>8,}\n"
             f"  shipments written    {self.shipments_written:>8,}"
         )
@@ -533,7 +538,16 @@ def main() -> int:
             # code on the way in, because packs are filtered on this column and
             # an unrecognised spelling of "United States" would drop real
             # buyers out of every pack without saying so.
-            country = clean_country(cell(row, "country")) or "US"
+            # The name outranks the feed. "American Eagle Outfitters Canada"
+            # arrived on a real record unlading in New York: the port cannot
+            # see it, and the name is what a customer reads in the pack.
+            country = (
+                country_from_name(name)
+                or clean_country(cell(row, "country"))
+                or "US"
+            )
+            if country != "US":
+                stats.rows_outside_us += 1
             port_unlading = clean_text(cell(row, "port_of_unlading"), 120)
             arrival = parse_date(cell(row, "arrival_date"))
 
