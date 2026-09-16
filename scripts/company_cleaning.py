@@ -50,7 +50,19 @@ _PLACEHOLDER_NAMES = {
 # of a paying customer. Split a full stop or comma sitting between two letters,
 # but only when what follows is a word rather than an initial, so "PVT.LTD"
 # opens up while "J.P. MORGAN" and "U.S.A." are left alone.
-_GLUED_SUFFIX = re.compile(r"(?<=[A-Za-z])([.,])(?=[A-Za-z]{2,})")
+# A domain in the name is not a glued suffix: "CBAZAAR.COM" must not open up
+# into "Cbazaar. Com". Real buyers file under their web address often enough
+# that this is worth an exception rather than a shrug.
+_TLDS = "com|net|org|io|biz|info|shop|store"
+_GLUED_SUFFIX = re.compile(
+    rf"(?<=[A-Za-z])([.,])(?!(?:{_TLDS})\b)(?=[A-Za-z]{{2,}})",
+    re.IGNORECASE,
+)
+
+# Manifest names are filed with brackets left open: "LAST BRAND INC (QUINCE".
+# The bracketed part is usually the brand a buyer is known by, so it is closed
+# rather than discarded.
+_UNBALANCED_OPEN = re.compile(r"\([^()]*$")
 
 # Dotted initials: U.S.A., J.P., A.B.C. A plain title-caser lower-cases
 # everything after the first letter and yields "U.s.a.".
@@ -80,6 +92,8 @@ def clean_company_name(raw: str | None) -> str | None:
         return None
 
     name = _WS.sub(" ", _GLUED_SUFFIX.sub(r"\1 ", str(raw))).strip()
+    if _UNBALANCED_OPEN.search(name):
+        name = f"{name})"
     if name.lower() in _PLACEHOLDER_NAMES:
         return None
 
@@ -141,9 +155,27 @@ def _title_case(name: str) -> str:
             words.append(stripped.upper())
             continue
 
-        words.append(word.capitalize())
+        # "WAL-MART" is two words to a reader and one token to a title-caser,
+        # which renders it "Wal-mart".
+        words.append("-".join(_capitalise(part) for part in word.split("-")))
 
     return " ".join(words)
+
+
+def _capitalise(word: str) -> str:
+    """
+    Upper-case the first LETTER, not the first character.
+
+    str.capitalize() uppercases position zero, so a name filed as
+    "(QUINCE" comes back as "(quince" — the bracket takes the capital and the
+    brand loses it.
+    """
+    lowered = word.lower()
+    match = re.search(r"[a-z]", lowered)
+    if not match:
+        return lowered
+    index = match.start()
+    return lowered[:index] + lowered[index].upper() + lowered[index + 1 :]
 
 
 def _looks_like_acronym(word: str) -> bool:

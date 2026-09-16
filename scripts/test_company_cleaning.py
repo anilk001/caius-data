@@ -188,6 +188,32 @@ if grouping_key(clean_company_name("MAERSK LINE A/S"), "", "", "8901") == groupi
 ):
     failures.append("  'A/S' is a legal suffix, not an alias separator")
 
+# --- Names as they actually arrive on the India lane -------------------------
+# Every one of these is a real consignee on HS 6204 from India.
+for raw, expected in [
+    # A domain is not a glued legal suffix. This came out as "Cbazaar. Com".
+    ("CBAZAAR.COM INC.", "Cbazaar.com Inc"),
+    # A hyphen is a word break to a reader and one token to a title-caser.
+    ("WAL-MART STORES, INC. USA", "Wal-Mart Stores, Inc USA"),
+    ("WAL-MART INC.", "Wal-Mart Inc"),
+    # Filed with the bracket left open; the brand inside is how buyers know it.
+    ("LAST BRAND INC (QUINCE", "Last Brand Inc (Quince)"),
+    ("URBAN OUTFITTERS,INC", "Urban Outfitters, Inc"),
+    ("ETHNOVOG INTERNATIONAL INC.", "Ethnovog International Inc"),
+]:
+    got = clean_company_name(raw)
+    if got != expected:
+        failures.append(f"  {raw!r}\n    expected {expected!r}\n    got      {got!r}")
+
+# The domain exception must not undo the suffix splitting it sits next to.
+for raw, expected in [
+    ("INDITEX TRENT RETAIL INDIA PVT.LTD.", "Inditex Trent Retail India Pvt Ltd"),
+    ("ACME PTE.LTD.", "Acme Pte Ltd"),
+]:
+    got = clean_company_name(raw)
+    if got != expected:
+        failures.append(f"  {raw!r}\n    expected {expected!r}\n    got      {got!r}")
+
 if failures:
     print(f"\n{len(failures)} failure(s):\n")
     print("\n\n".join(failures))
