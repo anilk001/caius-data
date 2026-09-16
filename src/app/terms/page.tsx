@@ -13,7 +13,8 @@ export default function TermsPage() {
         These terms govern your use of caiusdata.com and any data pack you purchase
         from it. The service is operated by {OPERATOR.legalName}, a limited liability
         company registered in the {OPERATOR.jurisdiction}
-        {' '}({OPERATOR.registeredAgentLine}). By buying a pack you agree to these terms.
+        {OPERATOR.registeredAgentLine ? ` (${OPERATOR.registeredAgentLine})` : ''}. By
+        buying a pack you agree to these terms.
       </p>
 
       <h2>1. What we sell</h2>
