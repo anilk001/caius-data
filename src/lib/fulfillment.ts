@@ -7,7 +7,7 @@ import { csvFilename, toCsv, withBom } from '@/lib/csv'
 import { PACK_COLUMNS } from '@/lib/export-columns'
 import { mergeByBuyer, overFetch } from '@/lib/buyers'
 import { MAX_SEARCH_LIMIT } from '@/lib/search-limits'
-import { getPack } from '@/lib/packs'
+import { getPack, DEFAULT_PACK_ID } from '@/lib/packs'
 import { sendPackDeliveryEmail } from '@/lib/email'
 import { EXPORT_BUCKET } from '@/lib/env'
 
@@ -83,7 +83,7 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
   const sessionId = session.id
 
   const metadata = session.metadata ?? {}
-  const packId = metadata.pack_id || 'starter-200'
+  const packId = metadata.pack_id || DEFAULT_PACK_ID
   const pack = getPack(packId)
   const recordCount = Number.parseInt(
     metadata.record_count || String(pack?.recordCount ?? 200),

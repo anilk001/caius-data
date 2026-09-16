@@ -17,30 +17,30 @@ export interface Pack {
 
 export const PACKS: Pack[] = [
   {
-    id: 'starter-200',
+    id: 'starter-50',
     name: 'Starter',
-    recordCount: 200,
-    amountCents: 1900,
-    blurb: 'Top 200 US importers for your HS code, ranked by shipment volume.',
+    recordCount: 50,
+    amountCents: 900,
+    blurb: 'The 50 biggest buyers on your lane. Sold whole, never part.',
   },
   {
-    id: 'growth-350',
-    name: 'Growth',
-    recordCount: 350,
+    id: 'standard-200',
+    name: 'Standard',
+    recordCount: 200,
     amountCents: 2900,
-    blurb: 'Widen the net to 350 buyers — enough for a full outreach quarter.',
+    blurb: 'Two hundred buyers — enough to work a full outreach quarter.',
     highlight: true,
   },
   {
     id: 'pro-500',
     name: 'Pro',
     recordCount: 500,
-    amountCents: 4900,
-    blurb: 'Every matching importer we hold, up to 500 companies.',
+    amountCents: 5900,
+    blurb: 'Five hundred buyers, the deepest list we currently deliver.',
   },
 ]
 
-export const DEFAULT_PACK_ID = 'starter-200'
+export const DEFAULT_PACK_ID = 'standard-200'
 
 export function getPack(id: string | null | undefined): Pack | undefined {
   if (!id) return undefined

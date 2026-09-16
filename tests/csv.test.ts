@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { csvFilename, toCsv, withBom, type CsvColumn } from '../src/lib/csv.ts'
 import { normalizeHs4, isHs4 } from '../src/lib/hs4.ts'
 import { MAX_SEARCH_LIMIT } from '../src/lib/search-limits.ts'
-import { PACKS, getPack } from '../src/lib/packs.ts'
+import { PACKS, getPack, MIN_SALE_CENTS } from '../src/lib/packs.ts'
 import { formatUsd } from '../src/lib/utils.ts'
 
 interface Row {
@@ -128,9 +128,24 @@ describe('packs', () => {
     }
   })
 
-  it('stays inside the advertised $19-$49 band', () => {
+  it('gets cheaper per company as the pack grows', () => {
+    // A bigger pack costing more per company is an upgrade nobody takes, and
+    // it is the easy mistake to make when a price is changed by hand.
+    const sorted = [...PACKS].sort((a, b) => a.recordCount - b.recordCount)
+    for (let i = 1; i < sorted.length; i += 1) {
+      const dearer = sorted[i].amountCents / sorted[i].recordCount
+      const cheaper = sorted[i - 1].amountCents / sorted[i - 1].recordCount
+      assert.ok(
+        dearer < cheaper,
+        `${sorted[i].id} costs more per company than ${sorted[i - 1].id}`,
+      )
+    }
+  })
+
+  it('never prices a whole pack below the minimum sale', () => {
+    // A pack under the floor could not be sold at any size, full or short.
     for (const pack of PACKS) {
-      assert.ok(pack.amountCents >= 1900 && pack.amountCents <= 4900, pack.id)
+      assert.ok(pack.amountCents >= MIN_SALE_CENTS, pack.id)
     }
   })
 

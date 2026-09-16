@@ -131,16 +131,37 @@ country, download the buyers — starts at **$1,500 a year**.
 
 Nobody sells a single filtered list once. That gap is the product.
 
-## Recommended pricing
+## Pricing, as set
 
-| Pack | Contents | Price | Net after Stripe |
-| --- | --- | --- | --- |
-| Starter | 50 companies, one lane | **$9** | $8.30 |
-| Standard | 200 companies, one lane | **$29** | $27.42 |
-| Full lane | every company in the lane | **$79** | $75.22 |
+A **lane** is one HS4 heading crossed with one origin country — "HS 6204 from
+India", not "HS 6204". That is the unit an exporter actually wants, and the one
+that makes the pitch *US dress buyers already sourcing from Vietnam* rather than
+a generic importer list.
 
-Stripe is charged at 4.4% + $0.30 — 2.9% + 30c plus the 1.5% international-card
-fee, because the buyers hold Indian cards and the account is American.
+| Pack | Companies | Price | Per company | Fewest sellable |
+| --- | --- | --- | --- | --- |
+| Starter | 50 | **$9** | $0.180 | 50 — sold whole, never part |
+| Standard | 200 | **$29** | $0.145 | 63 |
+| Pro | 500 | **$59** | $0.118 | 77 |
+
+Price per company falls as the pack grows, so each step up is a real upgrade;
+a test enforces that, because it is the easy thing to break when a price is
+edited by hand. Between the floor and the full pack the price is pro rata.
+Starter has no pro-rata band at all: at $9 for 50 it is already at the minimum,
+so a lane with 40 companies is not sold.
+
+### Not yet sellable: the whole lane
+
+A full lane can be far larger than any pack here — HS 6204 from Vietnam alone
+holds 7,592 buyers. `MAX_SEARCH_LIMIT` is 500, so 500 is the deepest list that
+can be delivered today, and Pro is named for what it is rather than promising a
+lane it cannot fill.
+
+Selling a genuine full-lane pack needs `searchCompaniesFull` to paginate rather
+than issue one capped query, and the resulting CSV size checked. That is the
+highest-margin product on the list — the data behind the largest lane costs $165
+once and resells for ever — so it is worth building, but it is a change to the
+query layer rather than a number in this file.
 
 ### Why $29 and not $9 or $19
 
