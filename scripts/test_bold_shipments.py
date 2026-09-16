@@ -148,7 +148,9 @@ check("both real shipments convert", len(rows), 2)
 check("a row with no buyer is counted", skipped["no consignee name"], 1)
 check("a non-object is counted", skipped["not an object"], 1)
 
-exports = dict(GLOBAL, type="exp", id="e1")
+# A different bill of lading, or the two rows are identical once mapped and
+# the duplicate fold below removes one before the direction filter is tested.
+exports = dict(GLOBAL, type="exp", id="e1", bill_of_lading_nbr="EXP0001")
 kept, dropped = convert([GLOBAL, exports], keep_type="imp")
 check("the direction filter works", len(kept), 1)
 check("and says what it dropped", dropped["not type=imp"], 1)
@@ -212,6 +214,20 @@ canadian = to_row(dict(GLOBAL, consignee_name="GAP (CANADA) INC",
                        end_port="BRAMPTON", country_imp="US"))
 check("the port overrides the feed's country",
       canadian["Consignee Country"], "CA")
+
+# --- The same shipment filed twice -------------------------------------------
+# ingest_csv checks a row's fingerprint against the database, so a re-run
+# inserts nothing twice. Two identical rows inside one file are both new to it,
+# and shipment count is what the pack is sold on.
+twice = dict(GLOBAL, id=1), dict(GLOBAL, id=2)
+rows, skipped = convert(list(twice))
+check("one shipment, filed under two record ids, is one row", len(rows), 1)
+check("and the fold is counted",
+      skipped["identical to a row already converted"], 1)
+
+different = dict(GLOBAL, id=3, bill_of_lading_nbr="OTHER123")
+rows, _ = convert([GLOBAL, different])
+check("two genuinely different bills stay two rows", len(rows), 2)
 
 if failures:
     print(f"\n{len(failures)} failure(s):\n")

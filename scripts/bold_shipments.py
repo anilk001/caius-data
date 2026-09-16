@@ -190,6 +190,11 @@ def to_row(record: dict) -> dict[str, str] | None:
 def convert(records, keep_type: str | None = None) -> tuple[list[dict], Counter]:
     rows: list[dict] = []
     skipped: Counter = Counter()
+    # One bill of lading arrives more than once, under different record ids.
+    # ingest_csv fingerprints rows against what is already in the database, so
+    # a re-run inserts nothing twice — but two identical rows inside one file
+    # are both new to it, and the company's shipment count is what we sell.
+    seen: set[tuple[str, ...]] = set()
 
     for record in records:
         if not isinstance(record, dict):
@@ -207,6 +212,13 @@ def convert(records, keep_type: str | None = None) -> tuple[list[dict], Counter]
         if row is None:
             skipped["no consignee name"] += 1
             continue
+
+        fingerprint = tuple(row[column] for column in COLUMNS)
+        if fingerprint in seen:
+            skipped["identical to a row already converted"] += 1
+            continue
+        seen.add(fingerprint)
+
         rows.append(row)
 
     personal = sum(1 for r in records if isinstance(r, dict) and detect_personal_fields(r))

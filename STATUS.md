@@ -257,6 +257,12 @@ it stood dropped 4 of them. Eleven more should have gone:
   "INDIVIDUAL (I9NBD221612934)" (a customs reference), "BOUTIQUE MANAGER" (a
   job title). Cut as noise or rejected as placeholders.
 
+One bill of lading arrives more than once under different record ids.
+`ingest_csv.py` fingerprints rows against what is already in the database, so a
+re-run inserts nothing twice — but two identical rows inside one file are both
+new to it, and shipment count is what the pack is sold on. `bold_shipments.py`
+folds them at conversion and says how many.
+
 The vendor ships an `is_shipping` flag on every record, free, and
 `bold_shipments.py` now honours it. It is a second opinion independent of the
 name, which is all `looks_like_logistics` has to go on.
