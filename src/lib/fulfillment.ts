@@ -5,6 +5,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { searchCompaniesFull } from '@/lib/search'
 import { csvFilename, toCsv, withBom } from '@/lib/csv'
 import { PACK_COLUMNS } from '@/lib/export-columns'
+import { mergeByBuyer, overFetch } from '@/lib/buyers'
+import { MAX_SEARCH_LIMIT } from '@/lib/search-limits'
 import { getPack } from '@/lib/packs'
 import { sendPackDeliveryEmail } from '@/lib/email'
 import { EXPORT_BUCKET } from '@/lib/env'
@@ -177,16 +179,33 @@ export async function fulfillCheckoutSession(session: Stripe.Checkout.Session) {
   // --- 2. Assemble the records ---------------------------------------------
   // One query, every column, already ranked by volume. The withheld columns
   // (street address, port, first/last seen) are what the buyer is paying for.
-  const { rows: ordered } = await searchCompaniesFull(admin, {
+  //
+  // Over-fetch, then merge: a pack sold as N companies must contain N companies
+  // a buyer can count, and one buyer filing from several warehouses is several
+  // rows in `companies`. Asking for exactly N and merging afterwards would
+  // deliver fewer than N every time a buyer has two addresses.
+  const { rows: matched } = await searchCompaniesFull(admin, {
     ...filters,
-    limit: recordCount,
+    limit: overFetch(recordCount, MAX_SEARCH_LIMIT),
   })
+
+  const ordered = mergeByBuyer(matched).slice(0, recordCount)
 
   if (ordered.length === 0) {
     await admin.from('orders').update({ status: 'failed' }).eq('id', orderId)
     throw new Error(
       `Order ${orderId} matched zero companies — refund required for ${email}`,
     )
+  }
+
+  // The order row carries what was actually delivered, not what was ordered.
+  // The delivery email reads its count from here, so a short pack says so
+  // rather than claiming a number the file does not contain.
+  if (ordered.length !== recordCount) {
+    await admin
+      .from('orders')
+      .update({ record_count: ordered.length })
+      .eq('id', orderId)
   }
 
   const csv = withBom(toCsv(ordered, PACK_COLUMNS))

@@ -3,6 +3,32 @@
 Worked 16 September 2026. Run `python3 scripts/pricing_model.py` to regenerate
 the arithmetic; `docs/pricing-model-output.txt` is the current output.
 
+## What a row is
+
+**One row is one company.** Not one shipment, not one company-location. A buyer
+with 400 shipments is one row; a buyer filing from three warehouses is one row
+with the other two addresses in an "Other Locations" column. A pack sold as 50
+companies contains 50 companies a customer can count and check.
+
+This is not free. Three things shrink a raw purchase before it becomes a pack:
+
+| Loss | Cause |
+| --- | --- |
+| Freight forwarders and carriers | Not buyers. An exporter mailing Expeditors has bought their competitors' shipping agents. |
+| Parcel consolidators | Top of one real list was 51,968 shipments worth $275,311 — $5 and one piece a shipment. |
+| Duplicate filings | Azazie appears twice in one 7,592-row list; the vendor bills 15 credits for each. |
+
+On the one real top-ten sample available, 11 records yielded 9 sellable rows.
+That is a small sample, so treat ~80% as a working figure and measure it on the
+first real purchase. It means the cost per **delivered** company is nearer 19
+credits than 15 — about $3.70 rather than $2.98 for 200 companies. Still small
+enough not to change any pricing decision, but the yield has to be measured
+before a pack count is promised, not after.
+
+The system enforces the promise rather than hoping for it: fulfilment
+over-fetches, merges, then takes exactly N, and checkout counts distinct buyers
+so the Stripe line item names the number the file will actually contain.
+
 ## The one fact that decides pricing
 
 **Data cost is per segment, not per sale.** The Boldata licence permits

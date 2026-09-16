@@ -4,6 +4,9 @@ import { createClient } from '@/lib/supabase/server'
 import { getStripe } from '@/lib/stripe'
 import { getPack } from '@/lib/packs'
 import { searchCompanies } from '@/lib/search'
+import { mergeByBuyer, overFetch } from '@/lib/buyers'
+import { MAX_SEARCH_LIMIT } from '@/lib/search-limits'
+import type { CompanyRow } from '@/types/database'
 import { checkoutSchema } from '@/lib/validation'
 import { siteUrl } from '@/lib/env'
 import { formatUsd } from '@/lib/utils'
@@ -78,10 +81,16 @@ export async function POST(request: NextRequest) {
     // after a bulk ingest — so a freshly loaded table can report zero and make
     // us refuse a sale we could perfectly well fulfil. Fetching one row is both
     // cheaper and exact.
+    //
+    // It also asks how many DISTINCT buyers there are, not how many rows. One
+    // buyer filing from three warehouses is three rows and one company, and the
+    // pack is sold by companies. Charging for 200 and delivering 183 is a
+    // refund and a chargeback, so the shortfall is priced before payment, not
+    // discovered after it.
     const anon = await createClient()
     const { rows: available } = await searchCompanies(anon, {
       ...filters,
-      limit: 1,
+      limit: overFetch(pack.recordCount, MAX_SEARCH_LIMIT),
     })
 
     if (available.length === 0) {
@@ -90,6 +99,11 @@ export async function POST(request: NextRequest) {
         { status: 409 },
       )
     }
+
+    // mergeByBuyer wants full rows; the public projection carries every field it
+    // reads, so the cast is safe and avoids handing the anon client '*'.
+    const buyers = mergeByBuyer(available as unknown as CompanyRow[])
+    const deliverable = Math.min(buyers.length, pack.recordCount)
 
     const origin = siteUrl()
     const nicheLabel = [filters.keyword, filters.hs4 ? `HS ${filters.hs4}` : null]
@@ -109,7 +123,7 @@ export async function POST(request: NextRequest) {
             currency: 'usd',
             unit_amount: pack.amountCents,
             product_data: {
-              name: `Caius Data — ${pack.name} pack (${pack.recordCount} US importers)`,
+              name: `Caius Data — ${pack.name} pack (${deliverable} companies)`,
               description: `${nicheLabel}. One-time purchase, delivered as CSV. No subscription.`,
             },
           },
@@ -118,7 +132,7 @@ export async function POST(request: NextRequest) {
       // Everything fulfilment needs, so the webhook is self-contained.
       metadata: {
         pack_id: pack.id,
-        record_count: String(pack.recordCount),
+        record_count: String(deliverable),
         hs4: filters.hs4 ?? '',
         keyword: filters.keyword ?? '',
         port: filters.port ?? '',
@@ -140,7 +154,7 @@ export async function POST(request: NextRequest) {
       stripe_session_id: session.id,
       customer_email: email ?? 'pending@checkout.invalid',
       hs4_code: filters.hs4 ?? '0000',
-      record_count: pack.recordCount,
+      record_count: deliverable,
       amount_cents: pack.amountCents,
       status: 'pending',
       query_params: {
