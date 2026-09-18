@@ -10,6 +10,9 @@ export function SiteHeader() {
 
         <nav className="flex items-center gap-1 text-sm sm:gap-2">
           <Button variant="ghost" size="sm" asChild>
+            <Link href="/packs">Packs</Link>
+          </Button>
+          <Button variant="ghost" size="sm" asChild>
             <Link href="/search">Search buyers</Link>
           </Button>
           <Button variant="ghost" size="sm" className="hidden sm:inline-flex" asChild>
