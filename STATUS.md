@@ -84,6 +84,60 @@ They confirmed in writing, 16 September 2026:
   (especially cheaper), no public or downloadable publication, no transfer or
   sub-licence outside their own company.
 
+### The signed agreement — read 21 September
+
+They sent the **Master Data Reseller & API Services Agreement**, 13 pages. Three
+things in it differ from what the 16 September email said.
+
+**The counterparty is not Boldata LLC.** It is **Digital Media Solutions AU Pty
+Ltd**, Level 5, 447 Collins Street, Melbourne VIC 3000, trading as
+BillOfLadingData.com. Governing law is **Victoria, Australia**, disputes in
+Victorian courts. No ACN or ABN appears anywhere in the document, which is
+unusual for an Australian company and worth checking on the ASIC register.
+Enforcing anything from a Wyoming LLC run out of Ireland, over sums of a few
+hundred dollars, is not realistic — price that in rather than plan around it.
+
+**The indemnity is the reverse of what was promised.** Their email said they
+warrant upstream rights and would indemnify for claims from their data sources.
+§17.2 indemnifies only against claims that *their own software, API or
+documentation* infringes IP, and expressly excludes "Third-Party Data; public
+records; government Data" — the entire product. With §15.1(3) qualifying the
+rights warranty "to its knowledge" and §18.2 capping liability at fees paid, a
+claim from a data source sits with us and recovers about the setup fee.
+`docs/vendor-indemnity-email.md` asks them to reconcile it. **Do not pay before
+that is answered.**
+
+**We may already be bound.** The Effective Date is "the date the Reseller first
+purchases, accesses, receives or uses any Data" — the free trial, 16 September —
+and §26.9 says use following availability of the agreement may constitute
+acceptance.
+
+What is genuinely good, and better than the email:
+
+* **§5.6 Permanent Use.** Purchased data survives credit expiry, subscription
+  end, service discontinuation *and termination*. This is the clause the whole
+  business rests on and it is explicit.
+* **§5.3 / §5.9** resale of raw and derived data, as packs, subsets or single
+  records. **§5.9** white-label under our own brand, no attribution required.
+* **§5.11** we set our own prices; no minimum purchase or revenue commitment.
+* **§5.14** they will not use our customer list to go around us.
+* **§22** "Commercial resale of Data permitted under Section 5 is not itself
+  grounds for an audit."
+
+Things to design around, not negotiate:
+
+* **§9.5 — every count they quote is an estimate**, not a promise. Our tiles
+  count our own database after ingest, which is why this costs us nothing.
+* **§20.4** — the setup fee is never refundable, and unused credits are refunded
+  only if **they** discontinue a service. If we stop, they appear to be lost.
+* **§14.3** — they may change credit costs for future usage.
+* **§5.10** — our End Customer terms must cover source and coverage limitations
+  and accuracy disclaimers. `/terms` §2 covers accuracy; coverage limitation is
+  the gap to close.
+* **§6.2** — no publishing substantial raw data for open public download. The
+  3-row sample is fine; the free search page is worth rate-limiting before we
+  hold real volume, as a business risk as much as a licence one.
+
 ### Still to settle
 
 1. **The written licence agreement.** Promised, not yet received. The setup fee
