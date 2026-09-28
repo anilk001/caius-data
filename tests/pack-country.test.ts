@@ -2,7 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { readdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 /**
  * Packs are sold as US importers, and the only thing keeping a Canadian buyer
@@ -18,7 +19,11 @@ import { join } from 'node:path'
  * regress and hard to see.
  */
 
-const SRC = new URL('../src/', import.meta.url).pathname
+// fileURLToPath, never URL.pathname: on Windows the pathname keeps a leading
+// slash ("/C:/...caius-data/src/") and readFileSync then looks for
+// C:\C:\...\src\lib\search.ts and reports ENOENT, so all three tests below
+// failed on a clean Windows checkout while the rule they guard was intact.
+const SRC = fileURLToPath(new URL('../src/', import.meta.url))
 
 function sourceFiles(dir: string): string[] {
   const found: string[] = []
@@ -35,7 +40,9 @@ test('companies is queried from exactly one place', () => {
     /\bfrom\(\s*['"]companies['"]\s*\)/.test(readFileSync(path, 'utf8')),
   )
   assert.deepEqual(
-    callers.map((p) => p.slice(SRC.length)),
+    // join() yields backslashes on Windows; compare in one separator so the
+    // failure message names a path and not the host it ran on.
+    callers.map((p) => p.slice(SRC.length).split(sep).join('/')),
     ['lib/search.ts'],
     'a new companies query must filter on country, or Canadian buyers leak into US packs',
   )
