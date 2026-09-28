@@ -62,10 +62,12 @@ test('the search link reproduces the pack', () => {
  * would be a promise nothing keeps.
  */
 test('no count is hard-coded anywhere in the feature', () => {
+  // readFileSync takes the URL itself. Passing .pathname instead breaks on
+  // Windows, where it carries a leading slash and resolves to C:\C:\...
   const sources = [
     '../src/lib/promo-packs.ts',
     '../src/app/packs/page.tsx',
-  ].map((rel) => readFileSync(new URL(rel, import.meta.url).pathname, 'utf8'))
+  ].map((rel) => readFileSync(new URL(rel, import.meta.url), 'utf8'))
 
   for (const source of sources) {
     // Comments are stripped first. The rule is about what a visitor reads on
@@ -89,7 +91,7 @@ test('the page counts buyers rather than rows', () => {
   // One company importing under two of a pack's headings is two rows and one
   // buyer. Counting rows would oversell every multi-heading pack.
   const page = readFileSync(
-    new URL('../src/app/packs/page.tsx', import.meta.url).pathname,
+    new URL('../src/app/packs/page.tsx', import.meta.url),
     'utf8',
   )
   assert.match(page, /countBuyers\(/)
