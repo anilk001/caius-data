@@ -368,12 +368,12 @@ HS code lifetime, and $299/month for a 1-seat "lead building" plan.
 
 Four lanes piloted on the **country-specific US API**
 (`POST /partner-api/US/shipping-records`, 2 credits a record, `bold_api.py
-records --us`). **2,230 credits spent** of an 8,000 ceiling. **Nothing new is
-in the database yet** — see "Not loaded" below.
+records --us`). **2,230 credits spent** of an 8,000 ceiling. 0904 is loaded;
+the other three lanes were abandoned.
 
 | Lane | HS6 used | Credits | Records | Distinct US buyers | Decision |
 | --- | --- | --- | --- | --- | --- |
-| 0904 Spices | 090422, 090421 | 1,608 | 800 (+4 probes) | 79 | Pass; pulled, **not loaded** |
+| 0904 Spices | 090422, 090421 | 1,608 | 800 (+4 probes) | 79 | Pass; **loaded** (98 rows, 434 shipments) |
 | 7113 Gems & Jewellery | — | 2 | 1 | — | Abandoned: not in the ocean manifest |
 | 3004 Pharmaceuticals | 300490, 300420, 300410 | 310 | 150 | 8 | Abandoned: 18.8 records per buyer, ~43 projected |
 | 2933 Chemicals | 293399, 293339, 293359, 293329 | 310 | 150 | 18 | Abandoned: 8.3 records per buyer, over the 8 limit |
@@ -420,27 +420,31 @@ manifest before buying: 0904 1,576 · 090422 880 · 090421 591 · 3004 10,000+ �
   a bad key). The note above that the sandbox "blocks
   tradedata.billofladingdata.com outright" was probably this.
 
-### Not loaded — 0904 is paid for and sits outside the database
+### 0904 loaded — 30 September
 
 The environment's `SUPABASE_SERVICE_ROLE_KEY` held a **publishable** key
-(`sb_publishable_…`, pasted inside `<…>`), which reads `companies` as anon and
-cannot write. The 800 records were pulled and converted, `ingest_csv.py
---dry-run` ran clean (765 rows → 98 company rows, 79 distinct US buyers, 434
-shipments; 321 forwarder rows dropped), and the payload was emitted. Applying
-it was not permitted in that session.
+(`sb_publishable_…`, pasted inside `<…>`), so `ingest_csv.py` could not write.
+The load went through the documented fallback instead: `--emit-payload`, then
+the two RPCs (`ingest_companies`, `ingest_shipments`) applied in chunks over an
+admin SQL connection. Verified after loading by a per-row fingerprint of every
+field on both tables: **98 companies and 434 shipments, identical to the
+payload**, 79 distinct US buyers by `buyerKey`. The live `/packs` tile reads 79.
 
-The files are `data/0904-all.json` (raw, 800 records) and
-`data/0904.payload.json` in that session's container, which is ephemeral. If
-they are gone, re-pulling costs 1,600 credits; the call is
+Before loading, the US API's text fields turned out to carry personal contact
+details that the goods-text redaction did not catch — consignee addresses are
+delivered whole in a paid pack. `personal_data.redact_address` and a stricter
+`redact_contacts` now cut, each rule from a real record in this pull:
 
-    python3 scripts/bold_api.py records --us --hs 090422 --hs 090421 \
-        --export-country IN --max-records 800 --page-size 100 --out data/0904.json
+* `USA TEL. 213 489 9018, FAX …`, `EMAIL: JJHTRADINGINC49@GMAIL.COM`,
+  `MR.ROBERT DE PAULA`, `VICTOR : (956) 212-9464` — in addresses
+* `NY11042 NSHAWHOUSEOFSPICESINDIA.COM` — an email with its `@` lost
+* `==CTC:MR.CARLOS A. LASTRA EMAIL :CARLOS…`, `=EMA IL :CARLOS=LASTRACHB.COM`
+  (label split by the fixed-width field, `=` typed for `@`),
+  `2ND NOTIFY PARTY JEANETTE LABARDINI CHB …` — in goods text
 
-To load, with a real `sb_secret_` key:
-
-    python3 scripts/bold_shipments.py data/0904-all.json --out data/0904.csv
-    python3 scripts/ingest_csv.py data/0904.csv --hs4 0904 --dry-run
-    python3 scripts/ingest_csv.py data/0904.csv --hs4 0904
+A scan of the loaded rows for `@`, email/phone labels, `CTC`, `ATTN`, `MR.`,
+`NOTIFY PARTY` and `=domain.com` finds nothing. **The earlier 6204 rows came
+from the global API, which carries no address, and scan clean.**
 
 79 buyers is short of the ~200 target: the 1,600-credit lane cap bought 800 of
 1,471 records. Over the full pull the ratio drifted to 10.1 records per buyer
