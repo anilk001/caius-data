@@ -44,6 +44,11 @@ from pathlib import Path
 BASE_URL = "https://tradedata.billofladingdata.com/partner-api"
 TIMEOUT = 120
 
+# Their Cloudflare front answers urllib's default "Python-urllib/3.x" with
+# error 1010 (banned browser signature) as a 403 — which reads exactly like a
+# rejected key. curl with the same key gets through. Any explicit agent does.
+USER_AGENT = "caius-data/1.0"
+
 
 def _key() -> str:
     key = os.environ.get("BOLD_API_KEY")
@@ -74,6 +79,7 @@ def post(endpoint: str, body: dict, *, retries: int = 3) -> dict:
                 "Content-Type": "application/json",
                 "api-key": _key(),
                 "Accept": "application/json",
+                "User-Agent": USER_AGENT,
             },
         )
         try:
@@ -291,6 +297,7 @@ def probe_endpoint(endpoint: str) -> tuple[int, str]:
             "Content-Type": "application/json",
             "api-key": _key(),
             "Accept": "application/json",
+            "User-Agent": USER_AGENT,
         },
     )
     try:
@@ -337,8 +344,19 @@ def cmd_probe(args: argparse.Namespace) -> None:
 
 # --- Buying shipment records -------------------------------------------------
 
-MAX_PAGE_SIZE = 250        # their limit
+# Their docs say 250. The USA API returns 100 however many are asked for, which
+# made the short-page test below read the first page as the last one.
+MAX_PAGE_SIZE = 100
 CREDITS_PER_RECORD = 1     # global API; the country-specific USA API is 2
+
+# The country-specific USA API is the CBP manifest itself, and the only source
+# carrying consignee_address — which is where city and state come from. It is
+# a separate route, not a filter on the global one, and it takes no `type` or
+# `import_countries` (US is always the importer). Found in the docs bundle as
+# /partner-api/US/shipping-records; `{anything}/shipping-records` validates, so
+# a 400 from a probe proves nothing about the country code.
+US_ENDPOINT = "US/shipping-records"
+US_CREDITS_PER_RECORD = 2
 
 
 def cmd_records(args: argparse.Namespace) -> None:
@@ -355,11 +373,24 @@ def cmd_records(args: argparse.Namespace) -> None:
     12 months when given, so a longer history has to be assembled from several
     runs rather than asked for in one.
     """
+    endpoint = US_ENDPOINT if args.us else "shipping-records"
+    per_record = US_CREDITS_PER_RECORD if args.us else CREDITS_PER_RECORD
+    # One page size for the whole run. The API pages by (page_no - 1) *
+    # page_size, so shrinking the last page to fit the cap moved its offset
+    # back and bought records already held: a 150 cap at 100 a page asked for
+    # page 2 of 50, which is records 51-100 again.
+    page_size = min(args.page_size, MAX_PAGE_SIZE, args.max_records)
+    if args.max_records % page_size:
+        sys.exit(
+            f"--max-records {args.max_records} is not a multiple of the page size "
+            f"{page_size}; pass --page-size so it is, or the last page overlaps."
+        )
     body: dict = {
-        "type": args.type,
-        "page_size": min(args.page_size, MAX_PAGE_SIZE),
-        "page_no": 1,
+        "page_size": page_size,
+        "page_no": args.start_page,
     }
+    if not args.us:
+        body["type"] = args.type
     if args.hs:
         body["hs_codes"] = args.hs
     if args.company:
@@ -369,7 +400,7 @@ def cmd_records(args: argparse.Namespace) -> None:
     if not any(k in body for k in ("hs_codes", "company_ids", "products")):
         sys.exit("Pass at least one of --hs, --company or --product.")
 
-    if args.import_country:
+    if args.import_country and not args.us:
         body["import_countries"] = [c.upper() for c in args.import_country]
     if args.export_country:
         body["export_countries"] = [c.upper() for c in args.export_country]
@@ -380,26 +411,36 @@ def cmd_records(args: argparse.Namespace) -> None:
         if args.end:
             body["date_range"]["end_date"] = args.end
 
-    cost = args.max_records * CREDITS_PER_RECORD
-    print(f"shipping-records  {json.dumps(body)}")
+    cost = args.max_records * per_record
+    print(f"{endpoint}  {json.dumps(body)}")
     print(f"Up to {args.max_records} records = about {cost} credits.")
+    if args.dry_run:
+        print("Dry run. Nothing spent.")
+        return
     if not args.yes:
         reply = input("Type 'yes' to spend them: ").strip().lower()
         if reply != "yes":
             sys.exit("Stopped. Nothing spent.")
 
     collected: list[dict] = []
-    page = 1
+    page = args.start_page
     while len(collected) < args.max_records:
         body["page_no"] = page
-        body["page_size"] = min(args.page_size, args.max_records - len(collected), MAX_PAGE_SIZE)
-        data = post("shipping-records", body)
+        data = post(endpoint, body)
         batch = _records(data)
         collected.extend(batch)
-        print(f"  page {page}: {len(batch)} record(s), {len(collected)} total")
-        # A short page is the last page. Without this the loop pays for empty
-        # pages until it reaches the cap.
-        if len(batch) < body["page_size"]:
+        total = _total(data)
+        of = f" of {total} matching" if total is not None else ""
+        print(f"  page {page}: {len(batch)} record(s), {len(collected)} total{of}")
+        # The reported total is the real end. Failing that, a short page is the
+        # last page — without one of these the loop pays for empty pages until
+        # it reaches the cap.
+        if not batch:
+            break
+        if total is not None:
+            if (page - 1) * page_size + len(batch) >= total:
+                break
+        elif len(batch) < page_size:
             break
         page += 1
         time.sleep(args.delay)
@@ -407,7 +448,7 @@ def cmd_records(args: argparse.Namespace) -> None:
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(collected, indent=2))
-    print(f"\nSaved {len(collected)} record(s) to {out} (~{len(collected)} credits).")
+    print(f"\nSaved {len(collected)} record(s) to {out} (~{len(collected) * per_record} credits).")
     _summarise(collected)
 
 
@@ -473,6 +514,21 @@ def cmd_call(args: argparse.Namespace) -> None:
 def cmd_inspect(args: argparse.Namespace) -> None:
     data = json.loads(Path(args.path).read_text())
     _summarise(data)
+
+
+def _total(data) -> int | None:
+    """The matching-record count the envelope reports, if it reports one."""
+    if isinstance(data, dict):
+        for key in ("total", "total_records", "total_count", "totalRecords"):
+            value = data.get(key)
+            if isinstance(value, (int, float)):
+                return int(value)
+        for value in data.values():
+            if isinstance(value, dict):
+                found = _total(value)
+                if found is not None:
+                    return found
+    return None
 
 
 def _records(data) -> list[dict]:
@@ -573,7 +629,12 @@ def main() -> int:
     r.add_argument("--end", help="YYYY-MM-DD")
     r.add_argument("--max-records", type=int, required=True, help="Hard cap; 1 credit each")
     r.add_argument("--page-size", type=int, default=MAX_PAGE_SIZE)
+    r.add_argument("--start-page", type=int, default=1,
+                   help="Resume after records already bought (pages of --page-size)")
     r.add_argument("--delay", type=float, default=1.0, help="Seconds between pages")
+    r.add_argument("--us", action="store_true",
+                   help="Country-specific USA API (2 credits each, carries consignee_address)")
+    r.add_argument("--dry-run", action="store_true", help="State the request and cost, spend nothing")
     r.add_argument("--yes", action="store_true", help="Skip the spend confirmation")
     r.add_argument("--out", required=True, help="Where to save the records")
     r.set_defaults(func=cmd_records)

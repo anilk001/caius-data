@@ -48,6 +48,7 @@ from company_cleaning import (  # noqa: E402
     clean_hs4,
     clean_state,
     clean_text,
+    country_from_address,
     country_from_name,
     grouping_key,
     parse_date,
@@ -650,8 +651,11 @@ def main() -> int:
             # The name outranks the feed. "American Eagle Outfitters Canada"
             # arrived on a real record unlading in New York: the port cannot
             # see it, and the name is what a customer reads in the pack.
+            # An address ending "... MEXICO" outranks the feed for the same
+            # reason: country_imp says US on in-bond cargo bound for Mexico.
             country = (
                 country_from_name(name)
+                or country_from_address(address)
                 or clean_country(cell(row, "country"))
                 or "US"
             )

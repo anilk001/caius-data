@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from company_cleaning import (
     clean_company_name,
     clean_country,
+    country_from_address,
     country_from_name,
     looks_like_logistics,
     looks_like_consolidator,
@@ -404,6 +405,61 @@ for raw, expected in [
 # A bracket with real content inside is still closed rather than cut.
 if clean_company_name("LAST BRAND INC (QUINCE") != "Last Brand Inc (Quince)":
     failures.append("  an open bracket with a brand inside must be closed, not stripped")
+
+# --- Country-specific US API pilots: India -> US, HS 0904, 2933, 3004 --------
+# Every name and address below arrived on a real record with country_imp US.
+for name in [
+    "SAVINO DEL BENE U.S.A. INC.", "GLOBELINE INTERNATIONAL SHIPPING IN",
+    "GLOBELINE SHIPPING, INC.", "SEVEN SEAS SHIPPING USA INC",
+    "KINTETSU WORLD EXPRESS (USA),INC.", "DEUGRO OCEAN TRANSPORT INC",
+    "TRANSCON LOGISTIC SERVICES, INC.,", "ECU WORLDWIDE", "ASSTRA NY INC.",
+    "AMASS GLOBAL NETWORK (US) INC", "CTL USA, INC.", "WEBTRANS",
+    "AERONET WORLDWIDE", "AIRLIFT (USA) INC.", "TRANSMODAL CORPORATION",
+    "BLACKSTONE SHIPPING AMERICAS INC.,", "GLENDALE WAREHOUSE & DIST CORP",
+]:
+    check(f"pilot logistics: {name[:30]}", looks_like_logistics(clean_company_name(name)), True)
+
+for name in [
+    "SILK ROAD WHOLESALER AND DISTRIBUTE", "DRY PRODUCE DIVISION USA, LLC",
+    "EUGIA US LLC,", "AVET PHARMACEUTICALS LABS INC", "SHIPPING SUPPLIES CO",
+]:
+    check(f"pilot buyer: {name[:30]}", looks_like_logistics(clean_company_name(name)), False)
+
+# A negotiable bill held for a bank used to become a company called "To".
+lehat = {
+    grouping_key(clean_company_name(n), None, None, "0904")
+    for n in ("KEN LEHAT", "KEN LEHAT ASSOC.", "KEN LEHAT & ASSOCIATES", "KEN LEHAT ASSOCIATES INC")
+}
+check("one broker, four spellings", len(lehat), 1)
+check("an ampersand inside a name is kept",
+      grouping_key("Johnson & Johnson", None, None, "3004") == grouping_key("Johnson", None, None, "3004"), False)
+
+check("to order of a bank", clean_company_name("TO ORDER OF WELLS FARGO BANK"), None)
+check("to order of a shipper", clean_company_name("TO ORDER OF JABS INTERNATIONAL PVT"), None)
+
+for name in [
+    "MOLECULAS FINAS DE MEXICO, SA DE C.", "GRUPO GYLSA, S.A. DE C.V.",
+    "NEWTRAL MEXICO S.A. DE C.V.", "ACME S. DE R.L. DE C.V.",
+]:
+    check(f"mexican legal form: {name[:30]}", country_from_name(clean_company_name(name)), "MX")
+check("dubai free zone", country_from_name("UPL MANAGEMENT DMCC"), "AE")
+for name in ["CASA DE CAMPO FOODS INC", "USA DE COLOR LLC"]:
+    check(f"not a legal form: {name[:30]}", country_from_name(clean_company_name(name)), None)
+
+for address, code in [
+    ("PROTON NO. 2 PARQUE INDUSTRIAL NAUC NAUCALPAN DE JUAREZ MEX 53489 MEXICO", "MX"),
+    ("CR 71 A 51 30 BOGOTA CUN 110111 COLOMBIA", "CO"),
+    ("PROTON NO. 2 PARQUE INDUSTRIAL NAUC NAUCALPAN DE JUAREZ MEX 53489 MEXIC  ", "MX"),
+    ("400 PARK AVE NEW YORK NY 10022 UNIT", None),
+    ("77 CANAL ST MEXI", None),
+    ("A-350, TTC INDUSTRIAL AREA, MIDC, M NAVI MUMBAI MH 400710 INDIA", "IN"),
+    ("16-00 POLLITT DRIVE FAIR FAIR LAWN NJ 07410 UNITED STATES", None),
+    ("5800 S 42ND STREET SUITE G ALBUQUERQUE NEW MEXICO", None),
+    ("1 INDIA ST BROOKLYN NY 11222", None),
+    ("", None),
+    (None, None),
+]:
+    check(f"address country: {str(address)[-28:]}", country_from_address(address), code)
 
 if failures:
     print(f"\n{len(failures)} failure(s):\n")

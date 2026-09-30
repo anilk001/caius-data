@@ -26,6 +26,10 @@ _SUFFIXES = (
     # This trade lane is India and South-East Asia, so their legal suffixes
     # matter as much as the US ones for collapsing name variants.
     "pvt", "private", "pte",
+    # "KEN LEHAT", "KEN LEHAT ASSOC.", "KEN LEHAT & ASSOCIATES" and "KEN LEHAT
+    # ASSOCIATES INC" were four buyers in one 800-record HS 0904 pull. Mirrored
+    # in LEGAL_SUFFIXES in src/lib/buyers.ts.
+    "associates", "assoc", "&", "and",
 )
 
 # Broker / consignee noise that rides along in the name field.
@@ -33,6 +37,10 @@ _NOISE_PATTERNS = (
     r"\bc\s*/\s*o\b.*$",          # "C/O SOME BROKER"
     r"\bdba\b.*$",                # "DBA TRADING NAME"
     r"\bdo not use\b.*$",
+    # "TO ORDER OF WELLS FARGO BANK" is a negotiable bill held for a bank, not
+    # a buyer. Cut only at "order of" below, it left a company called "To" on
+    # real HS 0904 records. Leading, the whole value goes.
+    r"^\s*to\s+(?:the\s+)?order\b.*$",
     r"\bto the order of\b.*$",
     r"\border of\b.*$",
     r"\bsame as consignee\b.*$",
@@ -507,6 +515,16 @@ _LOGISTICS_MARKERS = (
     # itself that, and bare "line" is far too common in apparel to use alone.
     "line llc", "line inc", "line ltd", "line corp",
     "lines llc", "lines inc", "lines ltd",
+    # Each reached a pilot on the country-specific US API, HS 0904, 2933 and
+    # 3004 from India: "Globeline International Shipping In" (truncated by the
+    # filer), "Seven Seas Shipping USA Inc", "Deugro Ocean Transport Inc",
+    # "Transcon Logistic Services" (singular), "Kintetsu World Express (USA)".
+    # Bare "shipping" is left alone — "Shipping Supplies Co" is a buyer.
+    "international shipping", "shipping inc", "shipping usa", "shipping llc",
+    "shipping in", "ocean transport", "logistic", "world express",
+    # The full HS 0904 pull: "Glendale Warehouse & Dist Corp" and "Blackstone
+    # Shipping Americas Inc".
+    "warehouse & dist", "shipping americas",
 )
 
 # Names that are logistics-adjacent but often ARE the buyer, so they do not
@@ -531,6 +549,13 @@ _KNOWN_LOGISTICS = (
     # looks_like_consolidator judges on ratios, and naming it here would hide
     # the only test that proves the ratios still work.
     "shipmonk", "dash fulfillment",
+    # Forwarders from the same pilots, with nothing in the name to say so.
+    # Savino Del Bene alone was 15 of 150 pharmaceutical records.
+    "savino del bene", "ecu worldwide", "asstra", "amass global", "ctl usa",
+    # "WEBTRANS" alone is Webtrans Logistics of Bayside NY, filed both ways;
+    # Airlift (USA) files from the LAX cargo centre; Transmodal's address
+    # names its "IMPORT DEPT".
+    "webtrans", "aeronet", "airlift usa", "transmodal",
 )
 
 
@@ -674,6 +699,54 @@ _ARM_FOLLOWERS = {
 }
 
 
+# "HELM DE MEXICO S.A." and "NEWTRAL MEXICO S.A. DE C.V." arrived on the
+# country-specific US API with country_imp US: in-bond cargo unladen at Newark
+# and trucked on to Mexico. Their addresses end in the country, which a US
+# consignee's never does, and the pilot for HS 2933 had fifteen such rows under
+# ten companies. Only the last words of the address are read, so "INDIA ST" or
+# "MEXICO BEACH FL" cannot relabel a US buyer.
+_ADDRESS_COUNTRIES = {
+    "mexico": "MX", "canada": "CA", "india": "IN", "colombia": "CO",
+    "guatemala": "GT", "honduras": "HN", "el salvador": "SV",
+    "costa rica": "CR", "nicaragua": "NI", "panama": "PA", "peru": "PE",
+    "chile": "CL", "brazil": "BR", "argentina": "AR", "ecuador": "EC",
+    "dominican republic": "DO", "united arab emirates": "AE", "uae": "AE",
+}
+
+# The Mexican legal form. It is only ever Mexican, unlike "S.A." or "Ltda".
+_MX_LEGAL_FORM = re.compile(r"\bs\s*(?:de\s*)?r\s*l\s*de\s*c\s*v\b|\bs\s*a\s*de\s*c\s*v?\b")
+
+
+def country_from_address(address: str | None) -> str | None:
+    """The foreign country a consignee address ends in, if it ends in one."""
+    if not address:
+        return None
+    tokens = [t for t in re.sub(r"[^a-z ]+", " ", str(address).lower()).split() if t]
+    for length in (3, 2, 1):
+        if len(tokens) < length:
+            continue
+        tail = " ".join(tokens[-length:])
+        code = _ADDRESS_COUNTRIES.get(tail)
+        if not code:
+            continue
+        # "ALBUQUERQUE NEW MEXICO" is in the United States.
+        if tail == "mexico" and len(tokens) > 1 and tokens[-2] == "new":
+            return None
+        return code
+    # The field is fixed-width: all eighteen Helm de Mexico filings end
+    # "NAUCALPAN DE JUAREZ MEX 53489 MEXIC". A cut-off country word counts only
+    # straight after a postal code, where a US address has its state instead.
+    if len(tokens) >= 2 and len(tokens[-1]) >= 4 and re.search(r"\d\W*$", _before_last_word(address)):
+        for country, code in _ADDRESS_COUNTRIES.items():
+            if " " not in country and country != tokens[-1] and country.startswith(tokens[-1]):
+                return code
+    return None
+
+
+def _before_last_word(address: str) -> str:
+    return re.sub(r"[A-Za-z]+\W*$", "", str(address).rstrip())
+
+
 def country_from_name(name: str | None) -> str | None:
     """
     The country a company name declares itself to belong to, if it does.
@@ -684,6 +757,15 @@ def country_from_name(name: str | None) -> str | None:
         return None
 
     text = _WS.sub(" ", str(name).lower())
+
+    # "MOLECULAS FINAS DE MEXICO, SA DE C." — the filer truncated the form, so
+    # the trailing "V" is optional.
+    if _MX_LEGAL_FORM.search(_WS.sub(" ", _PUNCT.sub(" ", text))):
+        return "MX"
+    # "UPL MANAGEMENT DMCC" — the Dubai Multi Commodities Centre free zone, and
+    # nothing else, carries that suffix. It arrived with no address at all.
+    if re.search(r"\bdmcc\b", text):
+        return "AE"
 
     # "GAP (CANADA) INC" — the standard way a subsidiary is written.
     for country, code in _ARM_COUNTRIES.items():

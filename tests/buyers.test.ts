@@ -58,6 +58,15 @@ describe('buyerKey', () => {
     )
   })
 
+  it('folds "& Associates" the way the Python ingest does', () => {
+    // Four spellings of one spice broker, all in one 800-record HS 0904 pull.
+    const keys = new Set(
+      ['KEN LEHAT', 'KEN LEHAT ASSOC.', 'KEN LEHAT & ASSOCIATES', 'KEN LEHAT ASSOCIATES INC'].map(buyerKey),
+    )
+    assert.equal(keys.size, 1)
+    assert.notEqual(buyerKey('Johnson & Johnson'), buyerKey('Johnson'))
+  })
+
   it('leaves a Danish A/S suffix alone', () => {
     // Splitting here would invent a company called "Maersk Line A".
     assert.notEqual(buyerKey('MAERSK LINE A/S'), buyerKey('MAERSK LINE A'))

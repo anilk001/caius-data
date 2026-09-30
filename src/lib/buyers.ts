@@ -25,6 +25,9 @@ const LEGAL_SUFFIXES = new Set([
   'limited', 'ltd', 'llc', 'lp', 'llp', 'plc', 'pllc',
   'holdings', 'holding', 'group', 'intl', 'international',
   'pvt', 'private', 'pte',
+  // "Ken Lehat", "Ken Lehat Assoc.", "Ken Lehat & Associates" and "Ken Lehat
+  // Associates Inc" were four buyers in one 800-record HS 0904 pull.
+  'associates', 'assoc', '&', 'and',
 ])
 
 /**
