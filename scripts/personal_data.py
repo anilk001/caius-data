@@ -111,6 +111,8 @@ _ADDRESS_END = re.compile(
 # An email the fixed-width field cut short has no domain left to match EMAIL.
 _EMAIL_FRAGMENT = re.compile(r"[\w.+-]*@[\w.-]*")
 
+_DOMAIN_TOKEN = re.compile(r"\S+\.(?:com|net|org|co|in|biz|us|info)\b\S*", re.IGNORECASE)
+
 # In an address, unlike goods text, a bare 3-3-4 number is a phone: nothing else
 # there has that shape. A ZIP+4 is 5-4.
 _LOOSE_PHONE = re.compile(r"\(?\b\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}\b")
@@ -128,6 +130,9 @@ def redact_address(text: str | None) -> str | None:
     if marker:
         cleaned = cleaned[: marker.start()]
     cleaned = _EMAIL_FRAGMENT.sub("", cleaned)
+    # "NY11042 NSHAWHOUSEOFSPICESINDIA.COM" — an email whose "@" the filer or
+    # the feed dropped. No street address contains a web domain.
+    cleaned = _DOMAIN_TOKEN.sub("", cleaned)
     cleaned = _LOOSE_PHONE.sub("", redact_contacts(cleaned) or "")
     cleaned = cleaned.replace(REDACTED, "")
     return re.sub(r"\s{2,}", " ", cleaned).strip(" ,.;:-") or None
