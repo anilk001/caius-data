@@ -40,7 +40,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from company_cleaning import clean_country, country_from_name
-from personal_data import detect_personal_fields, redact_contacts
+from personal_data import detect_personal_fields, redact_address, redact_contacts
 
 # Output column -> the response fields to try, in order. First non-empty wins.
 FIELD_MAP: dict[str, tuple[str, ...]] = {
@@ -201,6 +201,8 @@ def to_row(record: dict) -> dict[str, str] | None:
     row["Product Description"] = (
         redact_contacts(collapse_repeats(row["Product Description"])) or ""
     )
+    # The address is delivered whole in a paid pack, so it gets the stricter cut.
+    row["Consignee Address"] = redact_address(row["Consignee Address"]) or ""
     return row
 
 

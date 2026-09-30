@@ -77,6 +77,49 @@ for text in [
     if redact_contacts(text) != text:
         failures.append(f"  trade text must survive redaction:\n    {text!r}\n    became {redact_contacts(text)!r}")
 
+
+# --- Labelled contacts in goods text, from the HS 0904 pull on the US API ----
+for raw, expected in [
+    ("RED CHILLI POWDER FREIGHT PREPAID ==MO: +1 713 555 0100 EMAIL: INFO=RAJM ASALA.COM",
+     "RED CHILLI POWDER FREIGHT PREPAID"),
+    ("CRUSHED CHILLI GSTIN:36AABC P6061C1ZQ ==CTC:MR.CARLOS A. LASTRA EMAIL :CARLOS",
+     "CRUSHED CHILLI GSTIN:36AABC P6061C1ZQ"),
+    ("PAPRIKA . =GSTIN : 36AABCB3746N1Z F #EMAIL:DAVID=SCHIFFFOOD. C",
+     "PAPRIKA . =GSTIN : 36AABCB3746N1Z F"),
+    # HS codes and lot numbers are not contacts.
+    ("H S CODE 09042211 090 42219 ASSORTED CHILLI", "H S CODE 09042211 090 42219 ASSORTED CHILLI"),
+    ("MOISTURE 10% MAX, PH 5.5", "MOISTURE 10% MAX, PH 5.5"),
+]:
+    got = redact_contacts(raw)
+    if got != expected:
+        failures.append(f"  goods {raw!r}\n    expected {expected!r}\n    got      {got!r}")
+
+# --- Consignee addresses: every case from the HS 0904 pull on the US API ------
+from personal_data import redact_address  # noqa: E402
+
+for raw, expected in [
+    ("747 SOUTH CENTRAL AVE, LOS ANGELES, CA 90021, P.O.BOX 21386, USA TEL. 213 489 9018, FAX 213 489 1346",
+     "747 SOUTH CENTRAL AVE, LOS ANGELES, CA 90021, P.O.BOX 21386, USA"),
+    ("2512 TYLER AVE EL MONTE, CA 91733 EMAIL: JJHTRADINGINC49@GMAIL.COM AVE EL MONTE 91733 US",
+     "2512 TYLER AVE EL MONTE, CA 91733"),
+    ("P.O. BOX 10726 NEW ORLEANS, LA 70181 USA,  MR. ROBERT DE PAULA", "P.O. BOX 10726 NEW ORLEANS, LA 70181 USA"),
+    ("203 WINDSOR, CANTER DRIVE, EAST WINDSOR, NJ, 08520, US. PH NO:732, 960", "203 WINDSOR, CANTER DRIVE, EAST WINDSOR, NJ, 08520, US"),
+    ("209 45 45TH ROAD 2ND FLOOR BAYSIDE, NY 11361 T . 718-341-0066", "209 45 45TH ROAD 2ND FLOOR BAYSIDE, NY 11361"),
+    ("3801 W URSULA AVE MCALLEN TX 78503 USA VICTOR : (956) 212-9464", "3801 W URSULA AVE MCALLEN TX 78503 USA"),
+    ("P.O.BOX 10726 NEW ORLEANS,LA 70181 USA MR.ROBERT DE PAULA", "P.O.BOX 10726 NEW ORLEANS,LA 70181 USA"),
+    ("3250 CAMINO DEL SOL OXNARD; CA 93030,ZIP UNITED STATES,MARTINA ,TIFFNY.ALLEN@",
+     "3250 CAMINO DEL SOL OXNARD; CA 93030,ZIP UNITED STATES"),
+    ("1003 CRESTVIEW CIRCLE, USA WESTON FL 33323 UNITED STATES", "1003 CRESTVIEW CIRCLE, USA WESTON FL 33323 UNITED STATES"),
+    # Nothing to cut: a ZIP+4, a Mississippi address, a suite number.
+    ("16-00 POLLITT DRIVE FAIR LAWN NJ 07410-1234 UNITED STATES", "16-00 POLLITT DRIVE FAIR LAWN NJ 07410-1234 UNITED STATES"),
+    ("100 MAIN ST JACKSON MS 39201 US", "100 MAIN ST JACKSON MS 39201 US"),
+    ("1308 SANTA ANITA AVENUE SUITE #A SOUTH EL MONTE CA 91733", "1308 SANTA ANITA AVENUE SUITE #A SOUTH EL MONTE CA 91733"),
+    (None, None),
+]:
+    got = redact_address(raw)
+    if got != expected:
+        failures.append(f"  address {raw!r}\n    expected {expected!r}\n    got      {got!r}")
+
 if failures:
     print(f"\n{len(failures)} failure(s):\n")
     print("\n\n".join(failures))
