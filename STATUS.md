@@ -1,6 +1,6 @@
 # Caius Data — current state
 
-Written 15 September 2026. Read this first if you are picking the project up
+Written 15 September 2026; India → US lanes added 30 September. Read this first if you are picking the project up
 without the conversation that built it.
 
 ---
@@ -363,6 +363,93 @@ $690/1M, $1,950/5M; credits valid 12 months, extended by any later purchase;
 HS code lifetime, and $299/month for a 1-seat "lead building" plan.
 
 ---
+
+## India → US lanes, 30 September 2026
+
+Four lanes piloted on the **country-specific US API**
+(`POST /partner-api/US/shipping-records`, 2 credits a record, `bold_api.py
+records --us`). **2,230 credits spent** of an 8,000 ceiling. **Nothing new is
+in the database yet** — see "Not loaded" below.
+
+| Lane | HS6 used | Credits | Records | Distinct US buyers | Decision |
+| --- | --- | --- | --- | --- | --- |
+| 0904 Spices | 090422, 090421 | 1,608 | 800 (+4 probes) | 79 | Pass; pulled, **not loaded** |
+| 7113 Gems & Jewellery | — | 2 | 1 | — | Abandoned: not in the ocean manifest |
+| 3004 Pharmaceuticals | 300490, 300420, 300410 | 310 | 150 | 8 | Abandoned: 18.8 records per buyer, ~43 projected |
+| 2933 Chemicals | 293399, 293339, 293359, 293329 | 310 | 150 | 18 | Abandoned: 8.3 records per buyer, over the 8 limit |
+
+"Records per buyer" is records bought ÷ distinct US buyers after cleaning,
+counted with `buyerKey`, because that is what credits buy. On shipments kept
+after forwarder and foreign rows are dropped, 2933 is 2.9 and 3004 is 3.8 —
+their problem is forwarder and in-bond noise, not concentrated buyers. 2933
+at 8.33 is marginal and worth a second look if the rule is ever re-read that way.
+
+### Choosing HS6 codes costs nothing
+
+`insights` is free and reports `total_importers` and `total_shipments` for any
+HS code and lane. That is the consignee spread, so HS6 codes were ranked by
+distinct importers, not shipments:
+
+    0904  090422 214 · 090421 120 · 090411 48 · 090412 29
+    7113  711311 2,240 · 711319 1,899
+    3004  300490 912 · 300420 142 · 300410 86 · 300450 77
+    2933  293399 328 · 293339 199 · 293359 165 · 293329 96
+
+Those are the global dataset's numbers. The US API's own total (returned on
+any page, so a 1-record call costs 2 credits) checked each one against the
+manifest before buying: 0904 1,576 · 090422 880 · 090421 591 · 3004 10,000+ ·
+2933 1,013 · 293339 354 · 293399 172.
+
+### What the pilots found
+
+* **7113 is not in the data.** 1 record for the whole heading, 0 for 711311
+  and 711319. Jewellery flies, and the public CBP feed is ocean manifests.
+  The global dataset's 2,240 importers are from Indian export records, which
+  carry no US address. A jewellery pack needs a different source.
+* **3004 is forwarders.** 118 of 148 rows: Aurologistics (Aurobindo's own
+  import arm), Savino Del Bene, Expeditors, Hellmann, Kintetsu. Eight real
+  buyers in 150 records — Eugia, Aurobindo, Mylan, Rising, Eversana.
+* **2933 carries in-bond cargo for Mexico.** Helm de Mexico, Moleculas Finas
+  de Mexico, Newtral Mexico — `country_imp` US, unladen at Newark, addresses
+  ending MEXICO. `country_from_address` now catches them (the fixed-width
+  field cuts the word to "MEXIC"; that is handled). They stay out of US packs.
+* **The API pages at 100**, not the documented 250, and the old client read
+  the first short page as the last. Fixed, together with a paging bug that
+  would have re-bought records whenever the last page was shrunk to fit.
+* **Cloudflare blocks urllib's User-Agent** (error 1010, a 403 that looks like
+  a bad key). The note above that the sandbox "blocks
+  tradedata.billofladingdata.com outright" was probably this.
+
+### Not loaded — 0904 is paid for and sits outside the database
+
+The environment's `SUPABASE_SERVICE_ROLE_KEY` held a **publishable** key
+(`sb_publishable_…`, pasted inside `<…>`), which reads `companies` as anon and
+cannot write. The 800 records were pulled and converted, `ingest_csv.py
+--dry-run` ran clean (765 rows → 98 company rows, 79 distinct US buyers, 434
+shipments; 321 forwarder rows dropped), and the payload was emitted. Applying
+it was not permitted in that session.
+
+The files are `data/0904-all.json` (raw, 800 records) and
+`data/0904.payload.json` in that session's container, which is ephemeral. If
+they are gone, re-pulling costs 1,600 credits; the call is
+
+    python3 scripts/bold_api.py records --us --hs 090422 --hs 090421 \
+        --export-country IN --max-records 800 --page-size 100 --out data/0904.json
+
+To load, with a real `sb_secret_` key:
+
+    python3 scripts/bold_shipments.py data/0904-all.json --out data/0904.csv
+    python3 scripts/ingest_csv.py data/0904.csv --hs4 0904 --dry-run
+    python3 scripts/ingest_csv.py data/0904.csv --hs4 0904
+
+79 buyers is short of the ~200 target: the 1,600-credit lane cap bought 800 of
+1,471 records. Over the full pull the ratio drifted to 10.1 records per buyer
+from 5.8 in the pilot — the pilot's first 150 were unusually clean.
+
+**Buyer counts still overstate a little.** `buyerKey` is exact after suffixes,
+so "Rehan Spice Corp" / "Rehan Spices Corporation", "Toluca" / "Taluca Foods"
+and "Silk Road Wholesaler and Dist" / "…Distribute" each count twice. About
+five in the 0904 set. Rule 2 wants these merged; fuzzy matching is the fix.
 
 ## Loading real data
 
