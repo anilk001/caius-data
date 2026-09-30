@@ -4,8 +4,15 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { TrustBanner } from '@/components/trust-banner'
 import { BASE_CENTS, MIN_RECORDS, RATE_BANDS, priceCents } from '@/lib/pricing'
-import { HS_SUGGESTIONS, SECTORS } from '@/lib/hs-codes'
+import { HOME_CHIPS, visibleChips } from '@/lib/hs-codes'
+import { createPublicClient } from '@/lib/supabase/admin'
+import { countBuyers } from '@/lib/search'
+import { mergeByBuyer } from '@/lib/buyers'
+import type { CompanyRow } from '@/types/database'
 import { formatUsd } from '@/lib/utils'
+
+/** Same cadence as /packs: counts move only when a lane is ingested. */
+export const revalidate = 600
 
 const STEPS = [
   {
@@ -25,7 +32,31 @@ const STEPS = [
   },
 ]
 
-export default function HomePage() {
+/**
+ * Buyers under one heading, counted the way checkout counts them, and only as
+ * far as MIN_RECORDS — the chip needs to know it clears the bar, not by how
+ * much. Null when the count fails, which hides the chip.
+ */
+async function countHeading(code: string): Promise<number | null> {
+  try {
+    return await countBuyers(
+      createPublicClient(),
+      { hs4: code },
+      MIN_RECORDS,
+      (rows) => mergeByBuyer(rows as unknown as CompanyRow[]),
+    )
+  } catch (error) {
+    console.error('[home] chip count failed', code, error)
+    return null
+  }
+}
+
+export default async function HomePage() {
+  const counts = await Promise.all(
+    HOME_CHIPS.map(async (chip) => [chip.code, await countHeading(chip.code)] as const),
+  )
+  const chips = visibleChips(HOME_CHIPS, new Map(counts), MIN_RECORDS)
+
   return (
     <>
       {/* Hero ------------------------------------------------------------ */}
@@ -66,21 +97,20 @@ export default function HomePage() {
           </p>
         </div>
 
-        {/* Sector chips */}
-        <div className="mt-12 flex flex-wrap gap-2">
-          {SECTORS.map((sector) => {
-            const first = HS_SUGGESTIONS.find((s) => s.sector === sector)
-            return (
+        {/* Sector chips — only headings we can sell today */}
+        {chips.length > 0 && (
+          <div className="mt-12 flex flex-wrap gap-2">
+            {chips.map((chip) => (
               <Link
-                key={sector}
-                href={`/search?hs4=${first?.code ?? ''}`}
+                key={chip.code}
+                href={`/search?hs4=${chip.code}`}
                 className="border-border hover:border-foreground/30 hover:bg-accent rounded-full border px-3.5 py-1.5 text-sm transition-colors"
               >
-                {sector}
+                {chip.sector}
               </Link>
-            )
-          })}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <TrustBanner />

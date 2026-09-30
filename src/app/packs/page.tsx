@@ -5,7 +5,7 @@ import { createPublicClient } from '@/lib/supabase/admin'
 import { countBuyers } from '@/lib/search'
 import { mergeByBuyer } from '@/lib/buyers'
 import type { CompanyRow } from '@/types/database'
-import { MIN_RECORDS, priceCents } from '@/lib/pricing'
+import { BASE_CENTS, MIN_RECORDS, priceCents } from '@/lib/pricing'
 import { MAX_PACK_RECORDS } from '@/lib/search-limits'
 import { PROMO_PACKS, packSearchHref, type PromoPack } from '@/lib/promo-packs'
 import { formatNumber, formatUsd } from '@/lib/utils'
@@ -14,8 +14,7 @@ import { Button } from '@/components/ui/button'
 
 export const metadata: Metadata = {
   title: 'Ready-made buyer packs by sector',
-  description:
-    'US importer lists for garments, spices, leather goods, pharmaceuticals, gems and engineering. Every count is the number of companies actually held, priced from $9.',
+  description: `US companies importing garments, spices, leather goods, pharmaceuticals, gems and engineering goods from India. Every count is the number of companies actually held, priced from ${formatUsd(priceCents(MIN_RECORDS)!)}.`,
 }
 
 /**
@@ -72,9 +71,11 @@ export default async function PacksPage() {
           Ready-made buyer packs
         </h1>
         <p className="text-muted-foreground leading-relaxed">
-          Pick the sector you export. Every number below is the count of
-          separate US companies we hold for that sector right now — not a
-          target, not a round number. You pay for what you receive.
+          Pick the sector you export. Each pack lists US companies that
+          import those goods from India, read from US Customs ocean manifests
+          on the India–US lane. Every number below is the count of separate
+          US companies we hold for that sector right now — not a target, not
+          a round number. You pay for what you receive.
         </p>
       </header>
 
@@ -103,7 +104,7 @@ export default async function PacksPage() {
 
       <p className="text-muted-foreground mt-12 text-sm">
         Every pack is priced on the same rate card as a search you build
-        yourself: {formatUsd(900)} for the first {MIN_RECORDS} companies, then
+        yourself: {formatUsd(BASE_CENTS)} for the first {MIN_RECORDS} companies, then
         per company after that. There is no sector premium and no pack-only
         price.{' '}
         <Link href="/#pricing" className="underline underline-offset-4">
