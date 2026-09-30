@@ -143,7 +143,10 @@ def redact_address(text: str | None) -> str | None:
 # "=" typed for the "@", so EMAIL cannot see it), "==MO: +1…". A labelled
 # contact is never followed by more goods, so the text is cut at the label.
 _CONTACT_LABEL = re.compile(
-    r"\b(?:e\s*-?\s*mail|ctc|attn|contact|mob(?:ile)?|mo|tel|ph)\s*[:#]"
+    # The fixed-width field splits words anywhere: "=EMA IL :CARLOS=LASTRA…".
+    r"\b(?:e\s*-?\s*m\s*a\s*i\s*l|ctc|attn|contact|mob(?:ile)?|mo|tel|ph)\s*[:#]"
+    # An address with "=" typed for "@" and no label at all.
+    r"|[\w.+-]+=[\w-]+\s*\.\s*(?:com|net|org|co|in)\b"
     r"|\bmrs?\.\s*[a-z]"
     # "FREIGHT PREPAID 2ND NOTIFY PARTY JEANETTE LABARDINI CHB 4411 HERSHE
     # STREET" — a named customs broker, on a real HS 0904 record.
