@@ -28,22 +28,21 @@ export function LegalPage({
  * The operating entity, in one place so the legal pages and the footer cannot
  * drift apart. Every user-visible mention of the company reads from here.
  *
- * TODO before taking a live payment: fill in registeredAgentLine with the real
- * registered agent and Wyoming address from the formation documents, and
- * confirm legalName matches the Articles of Organization exactly — including
- * whether the state registered it as "LLC" or "L.L.C.".
+ * registeredAgentLine is the registered agent and Wyoming address from the
+ * formation documents. legalName must match the Articles of Organization
+ * exactly — including whether the state registered it as "LLC" or "L.L.C.".
  */
 export const OPERATOR = {
   legalName: 'Caius Data LLC',
   jurisdiction: 'State of Wyoming, United States',
   shortJurisdiction: 'Wyoming, USA',
   /**
-   * Registered agent name and Wyoming address. Empty until the formation
-   * paperwork lands, and rendered as nothing rather than as a bracketed
-   * placeholder — a visitor reading the terms, a bank included, should see a
-   * complete sentence or no sentence, never a note to ourselves.
+   * Registered agent name and Wyoming address. Rendered as nothing when empty
+   * rather than as a bracketed placeholder — a visitor reading the terms, a
+   * bank included, should see a complete sentence or no sentence.
    */
-  registeredAgentLine: '',
+  registeredAgentLine:
+    'registered agent: Doola, 30 N Gould St, Ste R, Sheridan, WY 82801, USA',
   supportEmail: 'support@caiusdata.com',
   privacyEmail: 'privacy@caiusdata.com',
 } as const

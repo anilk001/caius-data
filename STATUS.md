@@ -537,18 +537,21 @@ upserted. The first call spends credits; everything after it is local, and
 
 ## Before taking a real payment
 
-* Delete the `[TEST]` rows. `/search` claims "Every row is a real US company",
-  which is currently false.
-* Fill in `OPERATOR` in `src/components/legal-page.tsx` — the registered agent
-  line is a placeholder, and `legalName` must match the Articles of Organization.
-* Rotate every secret that passed through a chat transcript:
-  `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, and the Stripe keys.
-* Create a **live-mode** Stripe webhook endpoint with its own `whsec_`. Test and
-  live are separate worlds, and forgetting this is the classic launch-day bug.
-* Point `caiusdata.com` at Railway and set `SITE_URL` to it. Use `SITE_URL`, not
-  `NEXT_PUBLIC_SITE_URL` — the latter is baked in at build time.
-* Upgrade Supabase to Pro. Free projects pause after 7 days of inactivity, and
-  there are no backups.
+Done (3 October 2026): `[TEST]` rows deleted; registered agent filled in
+`OPERATOR`; live-mode Stripe key and webhook endpoint
+(`https://www.caiusdata.com/api/webhooks/stripe`, `checkout.session.completed`
+and `checkout.session.async_payment_succeeded`) deployed, with a checkout
+confirmed as `cs_live_`; `caiusdata.com` on Railway; Supabase on Pro.
+Prices stay in USD.
+
+Still open:
+
+* Secrets that passed through a chat transcript (`SUPABASE_SERVICE_ROLE_KEY`,
+  `RESEND_API_KEY`) were not rotated: owner's decision, 3 October 2026. To do it
+  later, move to an `sb_secret_` key and the `sb_publishable_` key, disable the
+  legacy JWT keys, and replace the Resend key.
+* The webhook's signing secret is unproven until a paid live order reaches
+  `delivered`.
 * Prices in `src/lib/packs.ts` are provisional, pending market research.
 
 ---
