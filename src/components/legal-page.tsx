@@ -42,7 +42,7 @@ export const OPERATOR = {
    * bank included, should see a complete sentence or no sentence.
    */
   registeredAgentLine:
-    'registered agent: Doola, 30 N Gould St, Ste R, Sheridan, WY 82801, USA',
+    'registered agent: Registered Agents Inc, 30 N Gould St Ste R, Sheridan, WY 82801',
   supportEmail: 'support@caiusdata.com',
   privacyEmail: 'privacy@caiusdata.com',
 } as const

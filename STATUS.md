@@ -537,7 +537,8 @@ upserted. The first call spends credits; everything after it is local, and
 
 ## Before taking a real payment
 
-Done (3 October 2026): `[TEST]` rows deleted; registered agent filled in
+Done (3 October 2026): `[TEST]` rows deleted; registered agent (Registered Agents Inc, per the
+Articles of Organization filed 15 September 2026, ID 2026-002082031) filled in
 `OPERATOR`; live-mode Stripe key and webhook endpoint
 (`https://www.caiusdata.com/api/webhooks/stripe`, `checkout.session.completed`
 and `checkout.session.async_payment_succeeded`) deployed, with a checkout
