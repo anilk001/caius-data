@@ -28,6 +28,8 @@ import { findPromoPack } from '@/lib/promo-packs'
 import { MIN_RECORDS, priceCents } from '@/lib/pricing'
 import { FREE_SAMPLE_ROWS } from '@/lib/packs'
 import { pageMetadata } from '@/lib/seo'
+import { breadcrumbLd, faqLd, productLd } from '@/lib/structured-data'
+import { JsonLd } from '@/components/json-ld'
 import { formatDate, formatNumber, formatUsd } from '@/lib/utils'
 
 /**
@@ -99,8 +101,32 @@ export default async function BuyerLandingPage({ params }: Props) {
   const live = new Set(listed.map((l) => l.page.slug))
   const related = relatedBuyerPages(page).filter((p) => live.has(p.slug))
 
+  const crumbs = [
+    { name: 'Home', path: '/' },
+    { name: 'Packs', path: '/packs' },
+    ...(sector ? [{ name: sector.title, path: `/packs#${sector.slug}` }] : []),
+    { name: page.product, path: buyerPageHref(page) },
+  ]
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
+      {/* The Product price is the price box's price: priceCents(stats.buyers). */}
+      <JsonLd
+        data={[
+          productLd({
+            name: `US importers of ${page.productLower} (HS ${page.hs4}) — buyer list CSV`,
+            description:
+              `${formatNumber(stats.buyers)} US companies importing ${page.covers}, ` +
+              `from US Customs import records. One-time CSV download.`,
+            path: buyerPageHref(page),
+            sku: `hs-${page.hs4}`,
+            priceCents: price,
+          }),
+          breadcrumbLd(crumbs),
+          faqLd(faqs),
+        ]}
+      />
+
       {/* Breadcrumb ---------------------------------------------------- */}
       <nav aria-label="Breadcrumb" className="text-muted-foreground mb-6 text-sm">
         <ol className="flex flex-wrap items-center gap-1">

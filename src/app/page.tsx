@@ -13,6 +13,8 @@ import { formatUsd } from '@/lib/utils'
 import { pageMetadata } from '@/lib/seo'
 import { buyerPageForHs4, buyerPageHref } from '@/lib/buyer-pages'
 import { homeFaqs } from '@/lib/home-faqs'
+import { faqLd } from '@/lib/structured-data'
+import { JsonLd } from '@/components/json-ld'
 
 export const metadata = pageMetadata({
   title: `US Importer Buyer Lists by HS Code from ${formatUsd(BASE_CENTS)} — Caius Data`,
@@ -240,6 +242,7 @@ export default async function HomePage() {
       </section>
 
       {/* FAQ ------------------------------------------------------------- */}
+      <JsonLd data={faqLd(faqs)} />
       <section id="faq" className="scroll-mt-16 border-t">
         <div className="mx-auto max-w-3xl px-4 py-20 sm:px-6">
           <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">

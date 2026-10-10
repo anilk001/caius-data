@@ -5,6 +5,9 @@ import { SiteFooter } from '@/components/site-footer'
 import { MIN_RECORDS, priceCents } from '@/lib/pricing'
 import { formatUsd } from '@/lib/utils'
 import { CANONICAL_ORIGIN, SITE_NAME } from '@/lib/seo'
+import { organizationLd, websiteLd } from '@/lib/structured-data'
+import { JsonLd } from '@/components/json-ld'
+import { OPERATOR } from '@/components/legal-page'
 import './globals.css'
 
 const inter = Inter({
@@ -50,6 +53,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans`}>
+        <JsonLd data={[organizationLd(OPERATOR), websiteLd()]} />
         <div className="flex min-h-dvh flex-col">
           <SiteHeader />
           <main className="flex-1">{children}</main>

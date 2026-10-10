@@ -12,6 +12,8 @@ import { formatNumber, formatUsd } from '@/lib/utils'
 import { pageMetadata } from '@/lib/seo'
 import { buyerPageHref, type BuyerPage } from '@/lib/buyer-pages'
 import { listedBuyerPages } from '@/lib/headings'
+import { breadcrumbLd, productLd } from '@/lib/structured-data'
+import { JsonLd } from '@/components/json-ld'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
@@ -75,8 +77,28 @@ export default async function PacksPage() {
   const ready = counts.filter((c) => c.buyers !== null && c.buyers >= MIN_RECORDS)
   const building = counts.filter((c) => c.buyers === null || c.buyers < MIN_RECORDS)
 
+  // Only packs we can sell get an Offer, at the price the card prints.
+  const products = ready.map(({ pack, buyers }) =>
+    productLd({
+      name: `${pack.title} — US importer buyer pack`,
+      description: `${formatNumber(buyers)} US companies importing ${pack.blurb.toLowerCase().replace(/\.$/, '')}. One-time CSV download.`,
+      path: `/packs#${pack.slug}`,
+      sku: `pack-${pack.slug}`,
+      priceCents: priceCents(buyers!)!,
+    }),
+  )
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
+      <JsonLd
+        data={[
+          ...products,
+          breadcrumbLd([
+            { name: 'Home', path: '/' },
+            { name: 'Packs', path: '/packs' },
+          ]),
+        ]}
+      />
       <header className="mb-10 max-w-2xl space-y-3">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
           Ready-made buyer packs
