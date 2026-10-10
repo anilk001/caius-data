@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next'
-import { siteUrl } from '@/lib/env'
+import { absoluteUrl } from '@/lib/seo'
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -11,8 +11,9 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ['/api/', '/success'],
       },
     ],
-    sitemap: `${siteUrl()}/sitemap.xml`,
+    // The canonical host, not siteUrl(): on Railway's generated domain that
+    // would point crawlers at a sitemap of the duplicate.
+    sitemap: absoluteUrl('/sitemap.xml'),
   }
 }
 
-export const dynamic = 'force-dynamic'

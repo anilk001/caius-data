@@ -1,14 +1,17 @@
 import type { Metadata } from 'next'
+import { pageMetadata } from '@/lib/seo'
+import { CONTENT_UPDATED, longDate } from '@/lib/content-dates'
 import { LegalPage, OPERATOR } from '@/components/legal-page'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Refund policy',
   description: 'When Caius Data refunds a buyer pack, and how to ask.',
-}
+  path: '/refunds',
+})
 
 export default function RefundsPage() {
   return (
-    <LegalPage title="Refund policy" updated="15 September 2026">
+    <LegalPage title="Refund policy" updated={longDate(CONTENT_UPDATED.refunds)}>
       <p>
         We sell a file. Once you have it you cannot un-see it, so a blanket
         no-questions refund would not be honest for either of us. Here is exactly

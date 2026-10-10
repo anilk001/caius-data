@@ -1,14 +1,17 @@
 import type { Metadata } from 'next'
+import { pageMetadata } from '@/lib/seo'
+import { CONTENT_UPDATED, longDate } from '@/lib/content-dates'
 import { LegalPage, OPERATOR } from '@/components/legal-page'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Terms of service',
   description: 'The terms on which Caius Data sells one-time US importer data packs.',
-}
+  path: '/terms',
+})
 
 export default function TermsPage() {
   return (
-    <LegalPage title="Terms of service" updated="15 September 2026">
+    <LegalPage title="Terms of service" updated={longDate(CONTENT_UPDATED.terms)}>
       <p>
         These terms govern your use of caiusdata.com and any data pack you purchase
         from it. The service is operated by {OPERATOR.legalName}, a limited liability

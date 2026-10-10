@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Logo } from '@/components/logo'
 import { OPERATOR } from '@/components/legal-page'
+import { CookieSettingsLink } from '@/components/pixels'
 
 const YEAR = new Date().getFullYear()
 
@@ -11,8 +12,8 @@ export function SiteFooter() {
         <div className="space-y-3">
           <Logo />
           <p className="text-muted-foreground max-w-xs text-sm leading-relaxed">
-            US customs import intelligence for Indian exporters. Pay once, download
-            your buyer list, keep it forever.
+            US customs buyer lists for SME exporters. Pay once, download your
+            buyer list, keep it forever.
           </p>
           <p className="text-muted-foreground text-xs leading-relaxed">
             Caius Data is operated by {OPERATOR.legalName}, a limited liability
@@ -34,8 +35,23 @@ export function SiteFooter() {
               </Link>
             </li>
             <li>
-              <Link href="/#faq" className="hover:text-foreground transition-colors">
+              <Link href="/#how-it-works" className="hover:text-foreground transition-colors">
                 How it works
+              </Link>
+            </li>
+            <li>
+              <Link href="/#faq" className="hover:text-foreground transition-colors">
+                FAQ
+              </Link>
+            </li>
+            <li>
+              <Link href="/guides" className="hover:text-foreground transition-colors">
+                Guides
+              </Link>
+            </li>
+            <li>
+              <Link href="/about" className="hover:text-foreground transition-colors">
+                About
               </Link>
             </li>
           </ul>
@@ -58,6 +74,9 @@ export function SiteFooter() {
               <Link href="/refunds" className="hover:text-foreground transition-colors">
                 Refund policy
               </Link>
+            </li>
+            <li>
+              <CookieSettingsLink className="hover:text-foreground cursor-pointer transition-colors" />
             </li>
             <li>
               <a

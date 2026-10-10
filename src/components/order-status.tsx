@@ -6,6 +6,8 @@ import { useSearchParams } from 'next/navigation'
 import { CheckCircle2, Download, Loader2, Mail, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { priceCents } from '@/lib/pricing'
+import { track } from '@/lib/tracking'
 
 interface Status {
   status: 'pending' | 'fulfilled' | 'delivered' | 'failed' | 'unknown'
@@ -67,6 +69,31 @@ export function OrderStatus() {
       clearInterval(timer)
     }
   }, [sessionId])
+
+  // One Purchase per order, however many times the page polls or reloads.
+  // Checkout charged priceCents(record_count) — it stores the deliverable
+  // count and prices it on this rate card — so the value is the amount paid
+  // without the status endpoint having to expose it. A failed order sends
+  // nothing; it is a refund, not a sale.
+  const paid =
+    state.status === 'pending' || state.status === 'fulfilled' || state.status === 'delivered'
+  useEffect(() => {
+    if (!sessionId || !paid || !state.recordCount) return
+    const key = `caius-purchase-tracked:${sessionId}`
+    try {
+      if (window.sessionStorage.getItem(key)) return
+      window.sessionStorage.setItem(key, '1')
+    } catch {
+      // Without storage a reload may send the event twice. Rare, and better
+      // than never sending it.
+    }
+    track('Purchase', {
+      value: (priceCents(state.recordCount) ?? 0) / 100,
+      currency: 'USD',
+      num_items: state.recordCount,
+      content_ids: state.hs4 ? [state.hs4] : [],
+    })
+  }, [sessionId, paid, state.recordCount, state.hs4])
 
   if (!sessionId) {
     return (

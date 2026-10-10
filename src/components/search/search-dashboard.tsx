@@ -12,6 +12,7 @@ import { PackPicker } from '@/components/search/pack-picker'
 import { formatHs4List, parseHs4List, MAX_HS4_CODES } from '@/lib/hs4'
 import { COMMON_PORTS, HS_SUGGESTIONS, describeHs4 } from '@/lib/hs-codes'
 import { FREE_SAMPLE_ROWS } from '@/lib/packs'
+import { track } from '@/lib/tracking'
 import type { Filters } from '@/lib/validation'
 import type { PublicCompany } from '@/types/database'
 
@@ -92,6 +93,19 @@ export function SearchDashboard() {
     return () => clearTimeout(timer)
   }, [draft])
 
+  // There is no submit button: a search runs when the debounced filters
+  // settle, so that is the moment counted as one. An empty query is not a
+  // search.
+  useEffect(() => {
+    if (!hasFilters) return
+    track('Search', {
+      search_string: [applied.keyword?.trim(), ...(applied.hs4 ?? [])].filter(Boolean).join(' '),
+      content_ids: applied.hs4 ?? [],
+    })
+    // queryString is the identity of the applied search; the rest derives from it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryString])
+
   // Keep the URL shareable — an exporter can send a filtered view to a colleague.
   useEffect(() => {
     router.replace(queryString ? `/search?${queryString}` : '/search', {
@@ -159,6 +173,7 @@ export function SearchDashboard() {
       link.click()
       link.remove()
       URL.revokeObjectURL(url)
+      track('Lead', { content_name: 'free sample', content_ids: applied.hs4 ?? [] })
     } catch (err) {
       setSampleError(
         err instanceof Error ? err.message : 'Could not build a sample.',

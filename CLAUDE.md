@@ -1,7 +1,9 @@
 # Caius Data
 
-One-time, pay-as-you-go **US importer buyer lists**, sold mainly to Indian
-exporters. No subscriptions. A buyer picks HS headings, sees how many US
+One-time, pay-as-you-go **US importer buyer lists**, positioned for SME
+exporters anywhere. The records come from the India–US lane, so copy says "US
+companies already importing your product", never that they buy from the
+visitor's country. No subscriptions. A buyer picks HS headings, sees how many US
 companies we hold, pays for that many, downloads a CSV.
 
 Operated by **Caius Data LLC** (Wyoming, US), owned by Anil Kumar
@@ -90,6 +92,23 @@ Two orderings that are easy to get backwards:
   bill arrives under several vendor record ids. Without one (38% of rows), only
   value and quantity separate two real shipments. See `fold_key` in
   `scripts/bold_shipments.py`.
+
+## Public SEO pages
+
+`/buyers/[slug]` (one per HS4 heading, `src/lib/buyer-pages.ts`), `/about`,
+`/guides`, the three `/*-alternative` pages, the sitemap and per-page metadata
+(`pageMetadata` in `src/lib/seo.ts`, canonical always on `www`).
+
+- A `/buyers` page renders only while its heading holds `MIN_RECORDS` buyers,
+  counted by `loadHeading` with `mergeByBuyer`. A failed read throws; never
+  turn it into a 404 or a zero.
+- Company names in public HTML are masked word by word (`maskCompanyName`).
+  Port of entry stays locked per row, as on `/search`: it is a paid column.
+- Competitor facts live only in `src/lib/competitors.ts` with a `verified`
+  flag; a comparison page is `noindex` until every fact is verified and dated.
+  Guides are `noindex` while `draft`. Neither enters the sitemap until then.
+- Meta and TikTok pixels load only after cookie consent (`src/lib/tracking.ts`).
+  `NEXT_PUBLIC_*_PIXEL_ID` are inlined at build time.
 
 ## Pricing
 

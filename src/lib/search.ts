@@ -140,6 +140,28 @@ async function collectPages<T>(
   )
 }
 
+/** One row of a heading landing page: the public projection plus its refresh date. */
+export type HeadingCompany = PublicCompany & Pick<CompanyRow, 'updated_at'>
+
+/**
+ * Every public row under a filter, for the /buyers/[slug] landing pages.
+ *
+ * The page states how many buyers a heading holds, its top states and ports
+ * and its date range, so it needs the whole heading rather than a page of it.
+ * Same columns the browser already receives from /api/search, plus
+ * `updated_at` for the "Data updated" line. Runs on the anon client.
+ */
+export async function searchHeading(
+  supabase: SupabaseClient<Database>,
+  options: SearchOptions,
+): Promise<HeadingCompany[]> {
+  return collectPages<HeadingCompany>(
+    supabase,
+    [...PUBLIC_COMPANY_COLUMNS, 'updated_at'].join(','),
+    { ...options, limit: MAX_PACK_RECORDS },
+  )
+}
+
 /**
  * Count distinct buyers a filter can supply, up to `wanted`.
  *

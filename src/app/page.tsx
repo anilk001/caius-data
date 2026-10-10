@@ -10,6 +10,19 @@ import { countBuyers } from '@/lib/search'
 import { mergeByBuyer } from '@/lib/buyers'
 import type { CompanyRow } from '@/types/database'
 import { formatUsd } from '@/lib/utils'
+import { pageMetadata } from '@/lib/seo'
+import { buyerPageForHs4, buyerPageHref } from '@/lib/buyer-pages'
+import { homeFaqs } from '@/lib/home-faqs'
+import { faqLd } from '@/lib/structured-data'
+import { JsonLd } from '@/components/json-ld'
+
+export const metadata = pageMetadata({
+  title: `US Importer Buyer Lists by HS Code from ${formatUsd(BASE_CENTS)} — Caius Data`,
+  absoluteTitle: true,
+  socialTitle: 'Caius Data — US buyer lists for SME exporters',
+  description: `Find the US companies already importing your product, from US Customs ocean manifests. One-time buyer lists from ${formatUsd(BASE_CENTS)}. Search by HS code, download a CSV, keep it forever.`,
+  path: '/',
+})
 
 /** Same cadence as /packs: counts move only when a lane is ingested. */
 export const revalidate = 600
@@ -51,11 +64,22 @@ async function countHeading(code: string): Promise<number | null> {
   }
 }
 
+/**
+ * A chip opens the heading's landing page when it has one, else the search.
+ * A chip renders only at MIN_RECORDS buyers or more, counted the same way the
+ * landing page counts, so the page it links to is always live.
+ */
+function chipHref(code: string): string {
+  const page = buyerPageForHs4(code)
+  return page ? buyerPageHref(page) : `/search?hs4=${code}`
+}
+
 export default async function HomePage() {
   const counts = await Promise.all(
     HOME_CHIPS.map(async (chip) => [chip.code, await countHeading(chip.code)] as const),
   )
   const chips = visibleChips(HOME_CHIPS, new Map(counts), MIN_RECORDS)
+  const faqs = homeFaqs(MIN_RECORDS)
 
   return (
     <>
@@ -63,7 +87,7 @@ export default async function HomePage() {
       <section className="mx-auto max-w-6xl px-4 pt-16 pb-14 sm:px-6 sm:pt-24">
         <div className="max-w-3xl space-y-6">
           <Badge variant="brand" className="px-2.5 py-1">
-            Built for Indian exporters
+            Built for SME Exporters
           </Badge>
 
           <h1 className="text-4xl leading-[1.08] font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
@@ -71,13 +95,18 @@ export default async function HomePage() {
           </h1>
 
           <p className="text-muted-foreground max-w-2xl text-lg leading-relaxed text-pretty">
+            Big trade-data platforms charge $3,000 a year. You need one list.
+            Get the US companies already importing your product —
+            <span className="text-foreground font-medium">
+              {' '}
+              {formatUsd(BASE_CENTS)} for {MIN_RECORDS}, no subscription.
+            </span>
+          </p>
+
+          <p className="text-muted-foreground max-w-2xl leading-relaxed text-pretty">
             Every ocean shipment into the United States is logged by US Customs.
             Caius Data turns those manifests into a clean buyer list for your HS
             code — company name, location, volume, port and product line.
-            <span className="text-foreground font-medium">
-              {' '}
-              Pay once, from {formatUsd(BASE_CENTS)}. No subscription.
-            </span>
           </p>
 
           <div className="flex flex-wrap items-center gap-3 pt-2">
@@ -103,7 +132,7 @@ export default async function HomePage() {
             {chips.map((chip) => (
               <Link
                 key={chip.code}
-                href={`/search?hs4=${chip.code}`}
+                href={chipHref(chip.code)}
                 className="border-border hover:border-foreground/30 hover:bg-accent rounded-full border px-3.5 py-1.5 text-sm transition-colors"
               >
                 {chip.sector}
@@ -116,7 +145,7 @@ export default async function HomePage() {
       <TrustBanner />
 
       {/* How it works ---------------------------------------------------- */}
-      <section id="faq" className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+      <section id="how-it-works" className="mx-auto max-w-6xl scroll-mt-16 px-4 py-20 sm:px-6">
         <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
           Three steps, about four minutes
         </h2>
@@ -208,6 +237,45 @@ export default async function HomePage() {
           <p className="text-muted-foreground mt-6 text-sm">
             Prices in USD. Packs are capped at the number of companies we actually
             hold for your filters — you are never charged for empty rows.
+          </p>
+        </div>
+      </section>
+
+      {/* FAQ ------------------------------------------------------------- */}
+      <JsonLd data={faqLd(faqs)} />
+      <section id="faq" className="scroll-mt-16 border-t">
+        <div className="mx-auto max-w-3xl px-4 py-20 sm:px-6">
+          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            Questions exporters ask
+          </h2>
+          <div className="mt-10 divide-y border-y">
+            {faqs.map((faq) => (
+              <details key={faq.question} className="group py-5">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-medium">
+                  {faq.question}
+                  <span
+                    aria-hidden="true"
+                    className="text-muted-foreground transition-transform group-open:rotate-45"
+                  >
+                    +
+                  </span>
+                </summary>
+                <p className="text-muted-foreground mt-3 text-sm leading-relaxed">
+                  {faq.answer}
+                </p>
+              </details>
+            ))}
+          </div>
+          <p className="text-muted-foreground mt-6 text-sm">
+            The full terms are in the{' '}
+            <Link href="/refunds" className="underline underline-offset-4">
+              refund policy
+            </Link>{' '}
+            and{' '}
+            <Link href="/terms" className="underline underline-offset-4">
+              terms of service
+            </Link>
+            .
           </p>
         </div>
       </section>

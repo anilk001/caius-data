@@ -9,13 +9,20 @@ import { BASE_CENTS, MIN_RECORDS, priceCents } from '@/lib/pricing'
 import { MAX_PACK_RECORDS } from '@/lib/search-limits'
 import { PROMO_PACKS, packSearchHref, type PromoPack } from '@/lib/promo-packs'
 import { formatNumber, formatUsd } from '@/lib/utils'
+import { pageMetadata } from '@/lib/seo'
+import { buyerPageHref, type BuyerPage } from '@/lib/buyer-pages'
+import { listedBuyerPages } from '@/lib/headings'
+import { monthYear } from '@/lib/heading-stats'
+import { breadcrumbLd, productLd } from '@/lib/structured-data'
+import { JsonLd } from '@/components/json-ld'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Ready-made buyer packs by sector',
-  description: `US companies importing garments, spices, leather goods, pharmaceuticals, gems and engineering goods from India. Every count is the number of companies actually held, priced from ${formatUsd(priceCents(MIN_RECORDS)!)}.`,
-}
+  description: `US companies importing garments, spices and more, from real US Customs records. Buyer packs from ${formatUsd(priceCents(MIN_RECORDS)!)}, no subscription.`,
+  path: '/packs',
+})
 
 /**
  * Counts are read from the database, not written into the page.
@@ -57,32 +64,69 @@ async function countPack(pack: PromoPack): Promise<PackCount> {
 }
 
 export default async function PacksPage() {
-  const counts = await Promise.all(PROMO_PACKS.map(countPack))
+  const [counts, listed] = await Promise.all([
+    Promise.all(PROMO_PACKS.map(countPack)),
+    // A sector card links only to headings that are live; a failed read
+    // drops the links, not the page.
+    listedBuyerPages().catch(() => []),
+  ])
+  // The newest load across live headings. Absent, not guessed, when no
+  // heading could be read.
+  const updated = monthYear(
+    listed
+      .map((l) => l.updatedAt)
+      .reduce<string | null>((hi, v) => (v && (!hi || v > hi) ? v : hi), null),
+  )
+  const headingsBySector = (slug: string): BuyerPage[] =>
+    listed.filter((l) => l.page.sector === slug).map((l) => l.page)
   // Sectors we can actually sell come first; the rest stay visible, marked, so
   // a visitor can see what is coming rather than wonder why their trade is
   // missing.
   const ready = counts.filter((c) => c.buyers !== null && c.buyers >= MIN_RECORDS)
   const building = counts.filter((c) => c.buyers === null || c.buyers < MIN_RECORDS)
 
+  // Only packs we can sell get an Offer, at the price the card prints.
+  const products = ready.map(({ pack, buyers }) =>
+    productLd({
+      name: `${pack.title} — US importer buyer pack`,
+      description: `${formatNumber(buyers)} US companies importing ${pack.blurb.toLowerCase().replace(/\.$/, '')}. One-time CSV download.`,
+      path: `/packs#${pack.slug}`,
+      sku: `pack-${pack.slug}`,
+      priceCents: priceCents(buyers!)!,
+    }),
+  )
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
+      <JsonLd
+        data={[
+          ...products,
+          breadcrumbLd([
+            { name: 'Home', path: '/' },
+            { name: 'Packs', path: '/packs' },
+          ]),
+        ]}
+      />
       <header className="mb-10 max-w-2xl space-y-3">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
           Ready-made buyer packs
         </h1>
         <p className="text-muted-foreground leading-relaxed">
           Pick the sector you export. Each pack lists US companies that
-          import those goods from India, read from US Customs ocean manifests
-          on the India–US lane. Every number below is the count of separate
+          already import these goods by sea, read from US Customs ocean
+          manifests. Every number below is the count of separate
           US companies we hold for that sector right now — not a target, not
           a round number. You pay for what you receive.
         </p>
+        {updated && (
+          <p className="text-muted-foreground text-sm">Data updated: {updated}</p>
+        )}
       </header>
 
       {ready.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {ready.map((entry) => (
-            <PackCard key={entry.pack.slug} {...entry} />
+            <PackCard key={entry.pack.slug} {...entry} headings={headingsBySector(entry.pack.slug)} />
           ))}
         </div>
       )}
@@ -96,7 +140,7 @@ export default async function PacksPage() {
           </p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {building.map((entry) => (
-              <PackCard key={entry.pack.slug} {...entry} />
+              <PackCard key={entry.pack.slug} {...entry} headings={headingsBySector(entry.pack.slug)} />
             ))}
           </div>
         </section>
@@ -116,12 +160,12 @@ export default async function PacksPage() {
   )
 }
 
-function PackCard({ pack, buyers }: PackCount) {
+function PackCard({ pack, buyers, headings }: PackCount & { headings: BuyerPage[] }) {
   const sellable = buyers !== null && buyers >= MIN_RECORDS
   const price = buyers === null ? null : priceCents(buyers)
 
   return (
-    <div className="flex flex-col rounded-xl border p-5">
+    <div id={pack.slug} className="flex scroll-mt-20 flex-col rounded-xl border p-5">
       <div className="flex items-start justify-between gap-3">
         <h3 className="font-medium">{pack.title}</h3>
         {sellable ? (
@@ -138,6 +182,21 @@ function PackCard({ pack, buyers }: PackCount) {
       <p className="text-muted-foreground mt-3 font-mono text-xs">
         HS {pack.hs4.join(' · ')}
       </p>
+
+      {headings.length > 0 && (
+        <ul className="mt-3 space-y-1 text-sm">
+          {headings.map((heading) => (
+            <li key={heading.slug}>
+              <Link
+                href={buyerPageHref(heading)}
+                className="underline-offset-4 hover:underline"
+              >
+                US importers of {heading.productLower} (HS {heading.hs4})
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div className="mt-auto pt-5">
         {sellable && price !== null ? (
