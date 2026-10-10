@@ -43,6 +43,11 @@ export function SiteFooter() {
                 FAQ
               </Link>
             </li>
+            <li>
+              <Link href="/guides" className="hover:text-foreground transition-colors">
+                Guides
+              </Link>
+            </li>
           </ul>
         </div>
 
