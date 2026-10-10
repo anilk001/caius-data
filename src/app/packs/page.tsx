@@ -9,13 +9,17 @@ import { BASE_CENTS, MIN_RECORDS, priceCents } from '@/lib/pricing'
 import { MAX_PACK_RECORDS } from '@/lib/search-limits'
 import { PROMO_PACKS, packSearchHref, type PromoPack } from '@/lib/promo-packs'
 import { formatNumber, formatUsd } from '@/lib/utils'
+import { pageMetadata } from '@/lib/seo'
+import { buyerPageHref, type BuyerPage } from '@/lib/buyer-pages'
+import { listedBuyerPages } from '@/lib/headings'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Ready-made buyer packs by sector',
   description: `US companies importing garments, spices and more, from real US Customs records. Buyer packs from ${formatUsd(priceCents(MIN_RECORDS)!)}, no subscription.`,
-}
+  path: '/packs',
+})
 
 /**
  * Counts are read from the database, not written into the page.
@@ -57,7 +61,14 @@ async function countPack(pack: PromoPack): Promise<PackCount> {
 }
 
 export default async function PacksPage() {
-  const counts = await Promise.all(PROMO_PACKS.map(countPack))
+  const [counts, listed] = await Promise.all([
+    Promise.all(PROMO_PACKS.map(countPack)),
+    // A sector card links only to headings that are live; a failed read
+    // drops the links, not the page.
+    listedBuyerPages().catch(() => []),
+  ])
+  const headingsBySector = (slug: string): BuyerPage[] =>
+    listed.filter((l) => l.page.sector === slug).map((l) => l.page)
   // Sectors we can actually sell come first; the rest stay visible, marked, so
   // a visitor can see what is coming rather than wonder why their trade is
   // missing.
@@ -82,7 +93,7 @@ export default async function PacksPage() {
       {ready.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {ready.map((entry) => (
-            <PackCard key={entry.pack.slug} {...entry} />
+            <PackCard key={entry.pack.slug} {...entry} headings={headingsBySector(entry.pack.slug)} />
           ))}
         </div>
       )}
@@ -96,7 +107,7 @@ export default async function PacksPage() {
           </p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {building.map((entry) => (
-              <PackCard key={entry.pack.slug} {...entry} />
+              <PackCard key={entry.pack.slug} {...entry} headings={headingsBySector(entry.pack.slug)} />
             ))}
           </div>
         </section>
@@ -116,12 +127,12 @@ export default async function PacksPage() {
   )
 }
 
-function PackCard({ pack, buyers }: PackCount) {
+function PackCard({ pack, buyers, headings }: PackCount & { headings: BuyerPage[] }) {
   const sellable = buyers !== null && buyers >= MIN_RECORDS
   const price = buyers === null ? null : priceCents(buyers)
 
   return (
-    <div className="flex flex-col rounded-xl border p-5">
+    <div id={pack.slug} className="flex scroll-mt-20 flex-col rounded-xl border p-5">
       <div className="flex items-start justify-between gap-3">
         <h3 className="font-medium">{pack.title}</h3>
         {sellable ? (
@@ -138,6 +149,21 @@ function PackCard({ pack, buyers }: PackCount) {
       <p className="text-muted-foreground mt-3 font-mono text-xs">
         HS {pack.hs4.join(' · ')}
       </p>
+
+      {headings.length > 0 && (
+        <ul className="mt-3 space-y-1 text-sm">
+          {headings.map((heading) => (
+            <li key={heading.slug}>
+              <Link
+                href={buyerPageHref(heading)}
+                className="underline-offset-4 hover:underline"
+              >
+                US importers of {heading.productLower} (HS {heading.hs4})
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div className="mt-auto pt-5">
         {sellable && price !== null ? (

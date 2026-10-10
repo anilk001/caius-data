@@ -10,6 +10,16 @@ import { countBuyers } from '@/lib/search'
 import { mergeByBuyer } from '@/lib/buyers'
 import type { CompanyRow } from '@/types/database'
 import { formatUsd } from '@/lib/utils'
+import { pageMetadata } from '@/lib/seo'
+import { buyerPageForHs4, buyerPageHref } from '@/lib/buyer-pages'
+
+export const metadata = pageMetadata({
+  title: `US Importer Buyer Lists by HS Code from ${formatUsd(BASE_CENTS)} — Caius Data`,
+  absoluteTitle: true,
+  socialTitle: 'Caius Data — US buyer lists for SME exporters',
+  description: `Find the US companies already importing your product, from US Customs ocean manifests. One-time buyer lists from ${formatUsd(BASE_CENTS)}. Search by HS code, download a CSV, keep it forever.`,
+  path: '/',
+})
 
 /** Same cadence as /packs: counts move only when a lane is ingested. */
 export const revalidate = 600
@@ -49,6 +59,16 @@ async function countHeading(code: string): Promise<number | null> {
     console.error('[home] chip count failed', code, error)
     return null
   }
+}
+
+/**
+ * A chip opens the heading's landing page when it has one, else the search.
+ * A chip renders only at MIN_RECORDS buyers or more, counted the same way the
+ * landing page counts, so the page it links to is always live.
+ */
+function chipHref(code: string): string {
+  const page = buyerPageForHs4(code)
+  return page ? buyerPageHref(page) : `/search?hs4=${code}`
 }
 
 export default async function HomePage() {
@@ -108,7 +128,7 @@ export default async function HomePage() {
             {chips.map((chip) => (
               <Link
                 key={chip.code}
-                href={`/search?hs4=${chip.code}`}
+                href={chipHref(chip.code)}
                 className="border-border hover:border-foreground/30 hover:bg-accent rounded-full border px-3.5 py-1.5 text-sm transition-colors"
               >
                 {chip.sector}
