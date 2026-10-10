@@ -12,6 +12,7 @@ import type { CompanyRow } from '@/types/database'
 import { formatUsd } from '@/lib/utils'
 import { pageMetadata } from '@/lib/seo'
 import { buyerPageForHs4, buyerPageHref } from '@/lib/buyer-pages'
+import { homeFaqs } from '@/lib/home-faqs'
 
 export const metadata = pageMetadata({
   title: `US Importer Buyer Lists by HS Code from ${formatUsd(BASE_CENTS)} — Caius Data`,
@@ -76,6 +77,7 @@ export default async function HomePage() {
     HOME_CHIPS.map(async (chip) => [chip.code, await countHeading(chip.code)] as const),
   )
   const chips = visibleChips(HOME_CHIPS, new Map(counts), MIN_RECORDS)
+  const faqs = homeFaqs(MIN_RECORDS)
 
   return (
     <>
@@ -141,7 +143,7 @@ export default async function HomePage() {
       <TrustBanner />
 
       {/* How it works ---------------------------------------------------- */}
-      <section id="faq" className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+      <section id="how-it-works" className="mx-auto max-w-6xl scroll-mt-16 px-4 py-20 sm:px-6">
         <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
           Three steps, about four minutes
         </h2>
@@ -233,6 +235,44 @@ export default async function HomePage() {
           <p className="text-muted-foreground mt-6 text-sm">
             Prices in USD. Packs are capped at the number of companies we actually
             hold for your filters — you are never charged for empty rows.
+          </p>
+        </div>
+      </section>
+
+      {/* FAQ ------------------------------------------------------------- */}
+      <section id="faq" className="scroll-mt-16 border-t">
+        <div className="mx-auto max-w-3xl px-4 py-20 sm:px-6">
+          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            Questions exporters ask
+          </h2>
+          <div className="mt-10 divide-y border-y">
+            {faqs.map((faq) => (
+              <details key={faq.question} className="group py-5">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-medium">
+                  {faq.question}
+                  <span
+                    aria-hidden="true"
+                    className="text-muted-foreground transition-transform group-open:rotate-45"
+                  >
+                    +
+                  </span>
+                </summary>
+                <p className="text-muted-foreground mt-3 text-sm leading-relaxed">
+                  {faq.answer}
+                </p>
+              </details>
+            ))}
+          </div>
+          <p className="text-muted-foreground mt-6 text-sm">
+            The full terms are in the{' '}
+            <Link href="/refunds" className="underline underline-offset-4">
+              refund policy
+            </Link>{' '}
+            and{' '}
+            <Link href="/terms" className="underline underline-offset-4">
+              terms of service
+            </Link>
+            .
           </p>
         </div>
       </section>
