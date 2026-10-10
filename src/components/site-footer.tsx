@@ -48,6 +48,11 @@ export function SiteFooter() {
                 Guides
               </Link>
             </li>
+            <li>
+              <Link href="/about" className="hover:text-foreground transition-colors">
+                About
+              </Link>
+            </li>
           </ul>
         </div>
 

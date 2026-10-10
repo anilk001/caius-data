@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { pageMetadata } from '@/lib/seo'
+import { CONTENT_UPDATED, longDate } from '@/lib/content-dates'
 import { LegalPage, OPERATOR } from '@/components/legal-page'
 
 export const metadata: Metadata = pageMetadata({
@@ -10,7 +11,7 @@ export const metadata: Metadata = pageMetadata({
 
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy policy" updated="15 September 2026">
+    <LegalPage title="Privacy policy" updated={longDate(CONTENT_UPDATED.privacy)}>
       <p>
         {OPERATOR.legalName} ({OPERATOR.jurisdiction}) operates caiusdata.com. This
         policy explains what we collect from you as a customer, and separately, what

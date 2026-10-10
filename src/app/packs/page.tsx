@@ -12,6 +12,7 @@ import { formatNumber, formatUsd } from '@/lib/utils'
 import { pageMetadata } from '@/lib/seo'
 import { buyerPageHref, type BuyerPage } from '@/lib/buyer-pages'
 import { listedBuyerPages } from '@/lib/headings'
+import { monthYear } from '@/lib/heading-stats'
 import { breadcrumbLd, productLd } from '@/lib/structured-data'
 import { JsonLd } from '@/components/json-ld'
 import { Badge } from '@/components/ui/badge'
@@ -69,6 +70,13 @@ export default async function PacksPage() {
     // drops the links, not the page.
     listedBuyerPages().catch(() => []),
   ])
+  // The newest load across live headings. Absent, not guessed, when no
+  // heading could be read.
+  const updated = monthYear(
+    listed
+      .map((l) => l.updatedAt)
+      .reduce<string | null>((hi, v) => (v && (!hi || v > hi) ? v : hi), null),
+  )
   const headingsBySector = (slug: string): BuyerPage[] =>
     listed.filter((l) => l.page.sector === slug).map((l) => l.page)
   // Sectors we can actually sell come first; the rest stay visible, marked, so
@@ -110,6 +118,9 @@ export default async function PacksPage() {
           US companies we hold for that sector right now — not a target, not
           a round number. You pay for what you receive.
         </p>
+        {updated && (
+          <p className="text-muted-foreground text-sm">Data updated: {updated}</p>
+        )}
       </header>
 
       {ready.length > 0 && (
