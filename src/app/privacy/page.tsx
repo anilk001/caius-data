@@ -46,7 +46,8 @@ export default function PrivacyPage() {
       <p>
         We process your email and order details to perform the contract you entered
         when you bought a pack. We keep server logs on the basis of our legitimate
-        interest in running a secure service.
+        interest in running a secure service. Advertising pixels run only on your
+        consent, which you can withdraw at any time.
       </p>
 
       <h2>3. Who we share it with</h2>
@@ -55,6 +56,10 @@ export default function PrivacyPage() {
         <li><strong>Resend</strong> — transactional email delivery.</li>
         <li><strong>Supabase</strong> — database and file storage.</li>
         <li><strong>Railway</strong> — application hosting.</li>
+        <li>
+          <strong>Meta</strong> and <strong>TikTok</strong> — advertising
+          measurement, and only if you accept advertising cookies (section 7).
+        </li>
       </ul>
       <p>
         We do not sell your personal data, and we do not add you to a marketing list
@@ -85,10 +90,28 @@ export default function PrivacyPage() {
         will respond within 30 days.
       </p>
 
-      <h2>7. Cookies</h2>
+      <h2 id="cookies">7. Cookies and advertising pixels</h2>
       <p>
-        We use no advertising or cross-site tracking cookies. Stripe sets cookies on
-        its own checkout pages for fraud prevention.
+        We use the Meta Pixel and the TikTok Pixel to measure our advertising on
+        those platforms — whether someone who saw an ad went on to view a buyer
+        page, run a search, download a free sample, start checkout or buy. They
+        set cookies and send Meta and TikTok your browser and device details, the
+        pages you visit here, and those events (with the HS codes involved and an
+        order value, never your card details or the file you bought), together
+        with any campaign tags in the link you arrived from.
+      </p>
+      <p>
+        These pixels load only after you click Accept on our cookie banner. If you
+        decline, or never choose, they are not loaded and nothing is sent. You can
+        change your mind at any time with the Cookie settings link at the foot of
+        every page. Meta and TikTok process this data under their own privacy
+        policies, and may transfer it outside the EU.
+      </p>
+      <p>
+        We set no other advertising or cross-site tracking cookies. We keep your
+        cookie choice, and the campaign you arrived from, in your browser&apos;s own
+        storage. Stripe sets cookies on its own checkout pages for fraud
+        prevention.
       </p>
 
       <h2>8. Contact</h2>

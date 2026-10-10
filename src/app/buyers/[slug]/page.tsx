@@ -30,6 +30,7 @@ import { FREE_SAMPLE_ROWS } from '@/lib/packs'
 import { pageMetadata } from '@/lib/seo'
 import { breadcrumbLd, faqLd, productLd } from '@/lib/structured-data'
 import { JsonLd } from '@/components/json-ld'
+import { TrackOnMount } from '@/components/pixels'
 import { formatDate, formatNumber, formatUsd } from '@/lib/utils'
 
 /**
@@ -125,6 +126,17 @@ export default async function BuyerLandingPage({ params }: Props) {
           breadcrumbLd(crumbs),
           faqLd(faqs),
         ]}
+      />
+
+      <TrackOnMount
+        event="ViewContent"
+        params={{
+          content_ids: [page.hs4],
+          content_name: page.product,
+          content_type: 'product',
+          value: price / 100,
+          currency: 'USD',
+        }}
       />
 
       {/* Breadcrumb ---------------------------------------------------- */}

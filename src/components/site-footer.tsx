@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Logo } from '@/components/logo'
 import { OPERATOR } from '@/components/legal-page'
+import { CookieSettingsLink } from '@/components/pixels'
 
 const YEAR = new Date().getFullYear()
 
@@ -73,6 +74,9 @@ export function SiteFooter() {
               <Link href="/refunds" className="hover:text-foreground transition-colors">
                 Refund policy
               </Link>
+            </li>
+            <li>
+              <CookieSettingsLink className="hover:text-foreground cursor-pointer transition-colors" />
             </li>
             <li>
               <a

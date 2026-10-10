@@ -8,6 +8,7 @@ import { CANONICAL_ORIGIN, SITE_NAME } from '@/lib/seo'
 import { organizationLd, websiteLd } from '@/lib/structured-data'
 import { JsonLd } from '@/components/json-ld'
 import { OPERATOR } from '@/components/legal-page'
+import { Pixels } from '@/components/pixels'
 import './globals.css'
 
 const inter = Inter({
@@ -59,6 +60,7 @@ export default function RootLayout({
           <main className="flex-1">{children}</main>
           <SiteFooter />
         </div>
+        <Pixels />
       </body>
     </html>
   )

@@ -9,7 +9,7 @@
  */
 export const CONTENT_UPDATED = {
   terms: '2026-09-15',
-  privacy: '2026-09-15',
+  privacy: '2026-10-10',
   refunds: '2026-09-15',
   about: '2026-10-10',
   comparisons: '2026-10-10',

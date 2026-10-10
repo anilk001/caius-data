@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { MIN_RECORDS, perCompanyCents, priceCents } from '@/lib/pricing'
 import { formatUsd } from '@/lib/utils'
 import type { Filters } from '@/lib/validation'
+import { track } from '@/lib/tracking'
 
 /**
  * Choose how many companies to buy.
@@ -61,6 +62,13 @@ export function PackPicker({
         throw new Error(payload.error ?? 'Checkout could not be started.')
       }
 
+      // The price shown, from the same rate card checkout charges on.
+      track('InitiateCheckout', {
+        value: (price ?? 0) / 100,
+        currency: 'USD',
+        num_items: wanted,
+        content_ids: filters.hs4 ?? [],
+      })
       window.location.assign(payload.url)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
