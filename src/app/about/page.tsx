@@ -39,7 +39,7 @@ export default async function AboutPage() {
       <h2>Who runs it</h2>
       <p>
         Caius Data is operated by {OPERATOR.legalName}, a limited liability company
-        registered in the {OPERATOR.jurisdiction}, and run by its owner, Anil Kumar.
+        registered in the {OPERATOR.jurisdiction}, and run by its owner, Anil Khetan.
       </p>
 
       <h2>Where the data comes from</h2>
