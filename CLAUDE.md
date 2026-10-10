@@ -6,7 +6,7 @@ companies already importing your product", never that they buy from the
 visitor's country. No subscriptions. A buyer picks HS headings, sees how many US
 companies we hold, pays for that many, downloads a CSV.
 
-Operated by **Caius Data LLC** (Wyoming, US), owned by Anil Kumar
+Operated by **Caius Data LLC** (Wyoming, US), owned by Anil Khetan
 (`ak@akay.ie`), who also runs Akay Irl Ltd — a separate business, separate repo.
 
 - Live: https://www.caiusdata.com (Railway, deploys on push)
