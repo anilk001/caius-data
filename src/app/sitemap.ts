@@ -1,38 +1,36 @@
 import type { MetadataRoute } from 'next'
-import { siteUrl } from '@/lib/env'
-import { HS_SUGGESTIONS } from '@/lib/hs-codes'
-import { PROMO_PACKS, packSearchHref } from '@/lib/promo-packs'
+import { listedBuyerPages } from '@/lib/headings'
+import { buyerPageHref } from '@/lib/buyer-pages'
+import { COMPETITORS, competitorPath, isPublished } from '@/lib/competitors'
+import { guidePath, publishedGuides } from '@/lib/guides'
+import { CONTENT_UPDATED } from '@/lib/content-dates'
+import { sitemapEntries } from '@/lib/sitemap-entries'
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  const base = siteUrl()
-  const now = new Date()
+/**
+ * An hour. The sitemap reads every heading's count, which is too much work to
+ * repeat for each crawler fetch and changes only when a lane is ingested.
+ */
+export const revalidate = 3600
 
-  const staticPages = ['', '/packs', '/search', '/terms', '/privacy', '/refunds'].map((path) => ({
-    url: `${base}${path}`,
-    lastModified: now,
-    changeFrequency: 'weekly' as const,
-    priority: path === '' ? 1 : 0.7,
-  }))
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // A failed read lists no /buyers pages for an hour rather than listing
+  // pages that may be empty. listedBuyerPages already drops a single failed
+  // heading; this catches the database being unreachable altogether.
+  const listed = await listedBuyerPages().catch((error) => {
+    console.error('[sitemap] heading counts failed', error)
+    return []
+  })
 
-  // One indexable landing URL per launch niche — this is the organic entry point
-  // for "6204 importers usa" style searches.
-  const hsPages = HS_SUGGESTIONS.map((s) => ({
-    url: `${base}/search?hs4=${s.code}`,
-    lastModified: now,
-    changeFrequency: 'weekly' as const,
-    priority: 0.6,
-  }))
-
-  // A sector pack is a broader query than any single heading, and it is the URL
-  // a visitor is most likely to be sent by someone else.
-  const packPages = PROMO_PACKS.map((pack) => ({
-    url: `${base}${packSearchHref(pack)}`,
-    lastModified: now,
-    changeFrequency: 'weekly' as const,
-    priority: 0.65,
-  }))
-
-  return [...staticPages, ...packPages, ...hsPages]
+  return sitemapEntries({
+    buyers: listed.map((l) => ({ path: buyerPageHref(l.page), updatedAt: l.updatedAt })),
+    comparisons: COMPETITORS.filter(isPublished).map((c) => ({ path: competitorPath(c) })),
+    comparisonsUpdated: CONTENT_UPDATED.comparisons,
+    guides: publishedGuides().map((g) => ({ path: guidePath(g), updated: g.updated })),
+    aboutUpdated: CONTENT_UPDATED.about,
+    legal: [
+      { path: '/terms', updated: CONTENT_UPDATED.terms },
+      { path: '/privacy', updated: CONTENT_UPDATED.privacy },
+      { path: '/refunds', updated: CONTENT_UPDATED.refunds },
+    ],
+  })
 }
-
-export const dynamic = 'force-dynamic'
