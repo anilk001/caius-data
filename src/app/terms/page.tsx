@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
+import { pageMetadata } from '@/lib/seo'
 import { LegalPage, OPERATOR } from '@/components/legal-page'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Terms of service',
   description: 'The terms on which Caius Data sells one-time US importer data packs.',
-}
+  path: '/terms',
+})
 
 export default function TermsPage() {
   return (

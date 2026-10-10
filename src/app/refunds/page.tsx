@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
+import { pageMetadata } from '@/lib/seo'
 import { LegalPage, OPERATOR } from '@/components/legal-page'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Refund policy',
   description: 'When Caius Data refunds a buyer pack, and how to ask.',
-}
+  path: '/refunds',
+})
 
 export default function RefundsPage() {
   return (

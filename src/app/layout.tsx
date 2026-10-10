@@ -4,6 +4,7 @@ import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 import { MIN_RECORDS, priceCents } from '@/lib/pricing'
 import { formatUsd } from '@/lib/utils'
+import { CANONICAL_ORIGIN, SITE_NAME } from '@/lib/seo'
 import './globals.css'
 
 const inter = Inter({
@@ -12,35 +13,28 @@ const inter = Inter({
   display: 'swap',
 })
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://caiusdata.com'
-
 // The cheapest sale there is, from the rate card. Metadata once quoted a
 // starting price and a range of company counts long after both had stopped
 // being true; a search result is the first thing a buyer reads, so it states
 // no count at all and takes its price from the only place prices live.
 const FROM = formatUsd(priceCents(MIN_RECORDS)!)
 
+/**
+ * Site-wide defaults only. Each page sets its own title, description,
+ * canonical, Open Graph and Twitter block through `pageMetadata` in
+ * src/lib/seo.ts — a default og:url here would have every page that forgot
+ * claim to be the home page, which is what every page used to do.
+ */
 export const metadata: Metadata = {
-  metadataBase: new URL(SITE_URL),
+  metadataBase: new URL(CANONICAL_ORIGIN),
   title: {
-    default: `US Importer Buyer Lists by HS Code from ${FROM} — Caius Data`,
-    template: '%s · Caius Data',
+    default: `US Importer Buyer Lists by HS Code from ${FROM} — ${SITE_NAME}`,
+    template: `%s · ${SITE_NAME}`,
   },
   description:
     `Search US importers by HS code and buy a one-time CSV of the buyer companies we hold. No subscription. From ${FROM}.`,
-  openGraph: {
-    type: 'website',
-    siteName: 'Caius Data',
-    title: 'Find the US companies already importing your product',
-    description:
-      `One-time buyer lists from ${FROM}. Search by HS code, download a CSV, keep it forever.`,
-    url: SITE_URL,
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Caius Data — US buyer lists for SME exporters',
-    description: `One-time buyer lists from ${FROM}. No subscription.`,
-  },
+  openGraph: { type: 'website', siteName: SITE_NAME },
+  twitter: { card: 'summary_large_image' },
   robots: { index: true, follow: true },
 }
 

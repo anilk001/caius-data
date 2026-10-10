@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
+import { pageMetadata } from '@/lib/seo'
 import { LegalPage, OPERATOR } from '@/components/legal-page'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Privacy policy',
   description: 'How Caius Data handles your personal data and the business records we publish.',
-}
+  path: '/privacy',
+})
 
 export default function PrivacyPage() {
   return (
