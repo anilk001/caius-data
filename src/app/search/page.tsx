@@ -2,11 +2,18 @@ import { Suspense } from 'react'
 import type { Metadata } from 'next'
 import { SearchDashboard } from '@/components/search/search-dashboard'
 import { Skeleton } from '@/components/ui/skeleton'
+import { FREE_SAMPLE_ROWS } from '@/lib/packs'
+import { MIN_RECORDS, priceCents } from '@/lib/pricing'
+import { formatUsd } from '@/lib/utils'
+
+// "Packs from $19" sat here, typed by hand, long after the rate card started
+// at $9. The price comes from the rate card or it is not stated.
+const FROM = formatUsd(priceCents(MIN_RECORDS)!)
 
 export const metadata: Metadata = {
   title: 'Search US importers by HS code',
   description:
-    'Filter US importer companies by product keyword, HS4 code and port of entry. Free to search, 3 free sample rows, packs from $19.',
+    `Search US importers by HS code or product. Free to search, ${FREE_SAMPLE_ROWS} free sample rows, buyer lists from ${FROM}. No subscription.`,
 }
 
 export default function SearchPage() {

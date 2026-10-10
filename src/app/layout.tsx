@@ -23,18 +23,11 @@ const FROM = formatUsd(priceCents(MIN_RECORDS)!)
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: 'Caius Data — US importer buyer lists for Indian exporters',
+    default: `US Importer Buyer Lists by HS Code from ${FROM} — Caius Data`,
     template: '%s · Caius Data',
   },
   description:
     `Search US importers by HS code and buy a one-time CSV of the buyer companies we hold. No subscription. From ${FROM}.`,
-  keywords: [
-    'US importer list',
-    'HS code buyers',
-    'export leads India',
-    'customs manifest data',
-    'buyer list CSV',
-  ],
   openGraph: {
     type: 'website',
     siteName: 'Caius Data',
@@ -45,7 +38,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Caius Data — US importer buyer lists',
+    title: 'Caius Data — US buyer lists for SME exporters',
     description: `One-time buyer lists from ${FROM}. No subscription.`,
   },
   robots: { index: true, follow: true },

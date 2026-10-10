@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 
 export const metadata: Metadata = {
   title: 'Ready-made buyer packs by sector',
-  description: `US companies importing garments, spices, leather goods, pharmaceuticals, gems and engineering goods from India. Every count is the number of companies actually held, priced from ${formatUsd(priceCents(MIN_RECORDS)!)}.`,
+  description: `US companies importing garments, spices and more, from real US Customs records. Buyer packs from ${formatUsd(priceCents(MIN_RECORDS)!)}, no subscription.`,
 }
 
 /**
@@ -72,8 +72,8 @@ export default async function PacksPage() {
         </h1>
         <p className="text-muted-foreground leading-relaxed">
           Pick the sector you export. Each pack lists US companies that
-          import those goods from India, read from US Customs ocean manifests
-          on the India–US lane. Every number below is the count of separate
+          already import these goods by sea, read from US Customs ocean
+          manifests. Every number below is the count of separate
           US companies we hold for that sector right now — not a target, not
           a round number. You pay for what you receive.
         </p>

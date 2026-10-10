@@ -11,8 +11,8 @@ export function SiteFooter() {
         <div className="space-y-3">
           <Logo />
           <p className="text-muted-foreground max-w-xs text-sm leading-relaxed">
-            US customs import intelligence for Indian exporters. Pay once, download
-            your buyer list, keep it forever.
+            US customs buyer lists for SME exporters. Pay once, download your
+            buyer list, keep it forever.
           </p>
           <p className="text-muted-foreground text-xs leading-relaxed">
             Caius Data is operated by {OPERATOR.legalName}, a limited liability

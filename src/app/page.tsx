@@ -63,7 +63,7 @@ export default async function HomePage() {
       <section className="mx-auto max-w-6xl px-4 pt-16 pb-14 sm:px-6 sm:pt-24">
         <div className="max-w-3xl space-y-6">
           <Badge variant="brand" className="px-2.5 py-1">
-            Built for Indian exporters
+            Built for SME Exporters
           </Badge>
 
           <h1 className="text-4xl leading-[1.08] font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
@@ -71,13 +71,18 @@ export default async function HomePage() {
           </h1>
 
           <p className="text-muted-foreground max-w-2xl text-lg leading-relaxed text-pretty">
+            Big trade-data platforms charge $3,000 a year. You need one list.
+            Get the US companies already importing your product —
+            <span className="text-foreground font-medium">
+              {' '}
+              {formatUsd(BASE_CENTS)} for {MIN_RECORDS}, no subscription.
+            </span>
+          </p>
+
+          <p className="text-muted-foreground max-w-2xl leading-relaxed text-pretty">
             Every ocean shipment into the United States is logged by US Customs.
             Caius Data turns those manifests into a clean buyer list for your HS
             code — company name, location, volume, port and product line.
-            <span className="text-foreground font-medium">
-              {' '}
-              Pay once, from {formatUsd(BASE_CENTS)}. No subscription.
-            </span>
           </p>
 
           <div className="flex flex-wrap items-center gap-3 pt-2">

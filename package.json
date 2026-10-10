@@ -2,7 +2,7 @@
   "name": "caius-data",
   "version": "0.1.0",
   "private": true,
-  "description": "Caius Data \u2014 pay-as-you-go US importer buyer packs for Indian exporters.",
+  "description": "Caius Data \u2014 pay-as-you-go US importer buyer lists for SME exporters.",
   "engines": {
     "node": ">=20.9.0"
   },
